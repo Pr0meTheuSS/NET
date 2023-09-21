@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -17,9 +18,8 @@ const (
 )
 
 // TODO: run on windows
-// TODO unix time Update with system time
 
-var clones = map[string]int64{}
+var clones = map[string]time.Time{}
 
 func selectNetInterfaceCli() *net.Interface {
 	interfaces, err := net.Interfaces()
@@ -113,36 +113,54 @@ func receiveMulticastMessages(p *ipv4.PacketConn) {
 			continue
 		}
 
-		clones[srcAddr.String()] = int64(time.Now().Unix())
+		clones[srcAddr.String()] = time.Now()
 
-		if oldClonesAmount != len(clones) {
-			printClones()
-		}
-
-		if cleanup() {
+		if oldClonesAmount != len(clones) || cleanup() {
 			printClones()
 		}
 	}
 }
 
+func init() {
+	os := runtime.GOOS
+	switch os {
+	case "windows":
+		fmt.Println("Windows")
+		clearCommand = "cls"
+	case "darwin":
+		fmt.Println("MAC operating system")
+		clearCommand = "clear"
+	case "linux":
+		fmt.Println("Linux")
+		clearCommand = "clear"
+	default:
+		fmt.Printf("%s.\nWarning: The program may not work correctly on this platform", os)
+		clearCommand = "clear"
+	}
+}
+
+var clearCommand = ""
+
 func clearScreen() {
-	cmd := exec.Command("clear")
+	cmd := exec.Command(clearCommand)
 	cmd.Stdout = os.Stdout
 	cmd.Run()
 }
 
 func printClones() {
 	clearScreen()
-	for k, _ := range clones {
-		fmt.Println("Clone address " + k + ";")
+	fmt.Println(time.Now())
+	for k, v := range clones {
+		fmt.Println("Clone address " + k + ";" + "time ellapsed: " + time.Now().Sub(v).String())
 	}
 }
 
+var timeout = 5.0
+
 func cleanup() bool {
 	wasSomethingDeleted := false
-	nowUnix := time.Now().Unix()
 	for k, v := range clones {
-		if nowUnix-v > 5 {
+		if v.Sub(time.Now()).Seconds() > timeout {
 			delete(clones, k)
 			wasSomethingDeleted = true
 		}

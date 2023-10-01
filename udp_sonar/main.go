@@ -17,6 +17,27 @@ const (
 	port               = 9876
 )
 
+func init() {
+	os := runtime.GOOS
+	switch os {
+	case "windows":
+		clearCommand = "cls"
+	case "darwin", "linux":
+		clearCommand = "clear"
+	default:
+		fmt.Printf("%s.\nWarning: The program may not work correctly on this platform", os)
+		clearCommand = "clear"
+	}
+}
+
+var clearCommand = ""
+
+func clearScreen() {
+	cmd := exec.Command(clearCommand)
+	cmd.Stdout = os.Stdout
+	cmd.Run()
+}
+
 // TODO: run on windows
 
 var clones = map[string]time.Time{}
@@ -54,7 +75,6 @@ func main() {
 	if len(os.Args) > 1 {
 		multicastGroup = os.Args[1]
 	}
-
 	conn, err := net.ListenPacket("udp", multicastGroup+":"+strconv.Itoa(port))
 	if err != nil {
 		fmt.Println(err)
@@ -119,32 +139,6 @@ func receiveMulticastMessages(p *ipv4.PacketConn) {
 			printClones()
 		}
 	}
-}
-
-func init() {
-	os := runtime.GOOS
-	switch os {
-	case "windows":
-		fmt.Println("Windows")
-		clearCommand = "cls"
-	case "darwin":
-		fmt.Println("MAC operating system")
-		clearCommand = "clear"
-	case "linux":
-		fmt.Println("Linux")
-		clearCommand = "clear"
-	default:
-		fmt.Printf("%s.\nWarning: The program may not work correctly on this platform", os)
-		clearCommand = "clear"
-	}
-}
-
-var clearCommand = ""
-
-func clearScreen() {
-	cmd := exec.Command(clearCommand)
-	cmd.Stdout = os.Stdout
-	cmd.Run()
 }
 
 func printClones() {

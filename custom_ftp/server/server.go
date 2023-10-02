@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"main/connection"
+	"main/speedmeasure"
 	"net"
 	"strconv"
 )
@@ -51,6 +52,8 @@ func (s Server) serveConnections() error {
 		log.Println("Accept new connection from client")
 
 		c := connection.NewServerSideConnection(conn, &FileConsumer{})
+		sm := speedmeasure.SpeedMeasurer{}
+		sm.MeasureSpeed(c)
 		go c.ServerServe()
 	}
 }

@@ -1,10 +1,12 @@
 package client
 
 import (
+	"io"
 	"main/connection"
 	"os"
 )
 
+// FileDataProvider implements DataProvider interface.
 type FileDataProvider struct {
 	File             connection.File
 	alreadyReadBytes uint64
@@ -13,7 +15,6 @@ type FileDataProvider struct {
 func (d *FileDataProvider) ProvideBytes(size uint32) ([]byte, error) {
 	f, err := os.Open(d.File.Path)
 	defer f.Close()
-
 	if err != nil {
 		return nil, err
 	}
@@ -25,9 +26,8 @@ func (d *FileDataProvider) ProvideBytes(size uint32) ([]byte, error) {
 	}
 
 	data := make([]byte, size)
-	n, err := f.Read(data)
-
-	if err != nil || n != int(size) {
+	n, err := io.ReadFull(f, data)
+	if err != nil {
 		return nil, err
 	}
 

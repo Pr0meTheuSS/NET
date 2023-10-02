@@ -2,6 +2,7 @@ package connection
 
 import (
 	"errors"
+	"fmt"
 	"main/ftp"
 	"net"
 )
@@ -15,6 +16,8 @@ type ServerSideConnection interface {
 
 	sendResponse(*ftp.FileTransferResponse) error
 
+	GetAlreadyReadBytes() uint64
+
 	isLoaded() bool
 	close()
 	ServerServe() error
@@ -24,6 +27,11 @@ type DataConsumer interface {
 	HandleBytes([]byte) error
 	HandleFileMetadata(File)
 }
+
+const (
+	// 4 Kb
+	maxAvailableChunkSize = 4 * 1024
+)
 
 func NewServerSideConnection(conn net.Conn, dc DataConsumer) ServerSideConnection {
 	return &ServerSideConnectionImpl{
@@ -66,6 +74,19 @@ func (ssc *ServerSideConnectionImpl) handleChunk(data []byte) error {
 	return ssc.consumer.HandleBytes(data)
 }
 
+func (ssc *ServerSideConnectionImpl) GetAlreadyReadBytes() uint64 {
+	fmt.Println(ssc.conn.alreadyReadBytes)
+	return ssc.conn.alreadyReadBytes
+}
+
+// func min(a, b uint32) uint32 {
+// 	if a < b {
+// 		return a
+// 	}
+
+// 	return b
+// }
+
 func (ssc *ServerSideConnectionImpl) ServerServe() error {
 	defer ssc.close()
 
@@ -75,6 +96,9 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 	}
 
 	ssc.conn.fileSizeBytes = handshake.TotalSize
+	ssc.conn.chunkSizeBytes = defaultChunkSize
+	// handshake.ChunkSize = ssc.conn.chunkSizeBytes
+
 	ssc.consumer.HandleFileMetadata(File{
 		Path:      handshake.Filename,
 		SizeBytes: handshake.TotalSize,
@@ -92,7 +116,9 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 }
 
 func (ssc *ServerSideConnectionImpl) receiveChunks() error {
-	for chunk, err := ssc.receiveChunk(); ; chunk, err = ssc.receiveChunk() {
+	fmt.Println("receive chunks")
+	for chunk, err := ssc.receiveChunk(); !ssc.isLoaded(); chunk, err = ssc.receiveChunk() {
+		fmt.Println("receive chunk")
 		if err != nil {
 			if err1 := ssc.sendResponse(&ftp.FileTransferResponse{Success: false}); err1 != nil {
 				return errors.Join(err, err1)
@@ -102,9 +128,6 @@ func (ssc *ServerSideConnectionImpl) receiveChunks() error {
 		}
 
 		ssc.handleChunk(chunk.GetData())
-		if ssc.isLoaded() {
-			break
-		}
 	}
 
 	return nil

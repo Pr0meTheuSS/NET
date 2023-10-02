@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"main/ftp"
 	"net"
 
@@ -96,11 +97,13 @@ func (c *Connection) receiveChunk() (*ftp.FileChunk, error) {
 	message := make([]byte, messageSize)
 	_, err = io.ReadFull(c.connection, message)
 	if err != nil {
+		log.Fatal(err)
 		return nil, err
 	}
 
 	chunk := ftp.FileChunk{}
 	if err := proto.Unmarshal(message, &chunk); err != nil {
+		log.Fatal(err)
 		return nil, err
 	}
 

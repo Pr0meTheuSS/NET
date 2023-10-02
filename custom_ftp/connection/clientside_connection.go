@@ -2,7 +2,7 @@ package connection
 
 import (
 	"errors"
-	"log"
+	"fmt"
 	"main/ftp"
 	"net"
 )
@@ -49,7 +49,6 @@ func (csc *ClientSideConnectionImpl) sendChunk(chunk *ftp.FileChunk) error {
 }
 
 func (csc *ClientSideConnectionImpl) sendHandshake(handshake *ftp.Handshake) error {
-	log.Printf("%+v", handshake)
 	csc.conn.fileSizeBytes = uint64(csc.file.SizeBytes)
 	return csc.conn.sendHandshake(handshake)
 }
@@ -68,11 +67,12 @@ func (csc *ClientSideConnectionImpl) ClientServe() error {
 		return err
 	}
 
-	handshakeFromServer, err := csc.receiveHandshake()
+	_, err := csc.receiveHandshake()
 	if err != nil {
 		return err
 	}
-	csc.conn.chunkSizeBytes = handshakeFromServer.ChunkSize
+
+	csc.conn.chunkSizeBytes = defaultChunkSize
 
 	if err := csc.sendChunks(); err != nil {
 		return err
@@ -92,6 +92,7 @@ func (csc *ClientSideConnectionImpl) ClientServe() error {
 
 func (csc *ClientSideConnectionImpl) sendChunks() error {
 	for data, err := csc.provider.ProvideBytes(uint32(csc.conn.chunkSizeBytes)); len(data) != 0; {
+		fmt.Println("send chunk")
 		if err != nil {
 			return err
 		}

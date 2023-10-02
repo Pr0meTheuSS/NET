@@ -1,12 +1,14 @@
 package server
 
 import (
+	"fmt"
 	"main/connection"
 	"main/fs"
 	"os"
 	"path/filepath"
 )
 
+// FileConsumer implements DataConsumer interface.
 type FileConsumer struct {
 	filename string
 }
@@ -32,5 +34,6 @@ func (fc *FileConsumer) HandleBytes(data []byte) error {
 		return err
 	}
 
+	fmt.Println(data)
 	return nil
 }

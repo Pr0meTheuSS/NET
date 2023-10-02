@@ -67,10 +67,12 @@ func (csc *ClientSideConnectionImpl) ClientServe() error {
 		return err
 	}
 
-	_, err := csc.receiveHandshake()
+	handshakeFromServer, err := csc.receiveHandshake()
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("Handshake from server:%+v\n", handshakeFromServer)
 
 	csc.conn.chunkSizeBytes = defaultChunkSize
 
@@ -92,7 +94,6 @@ func (csc *ClientSideConnectionImpl) ClientServe() error {
 
 func (csc *ClientSideConnectionImpl) sendChunks() error {
 	for data, err := csc.provider.ProvideBytes(uint32(csc.conn.chunkSizeBytes)); len(data) != 0; {
-		fmt.Println("send chunk")
 		if err != nil {
 			return err
 		}

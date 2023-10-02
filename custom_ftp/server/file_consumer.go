@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"main/connection"
 	"main/fs"
 	"os"
@@ -10,20 +9,22 @@ import (
 
 // FileConsumer implements DataConsumer interface.
 type FileConsumer struct {
-	filename string
+	filename         string
+	alreadyReadBytes int64
 }
 
-func (fc *FileConsumer) HandleFileMetadata(f connection.File) {
+func (fc *FileConsumer) HandleFileMetadata(f connection.File) string {
+	fs.CreateDirectoryIfNotExists(defaultUploadsDir)
 	fc.filename = filepath.Base(f.Path)
+
+	fc.filename = filepath.Join(defaultUploadsDir, fc.filename)
+	fc.filename = fs.SelectUniqueNameForFile(fc.filename)
+
+	return filepath.Base(fc.filename)
 }
 
 func (fc *FileConsumer) HandleBytes(data []byte) error {
-	fs.CreateDirectoryIfNotExists(defaultUploadsDir)
-
-	fc.filename = filepath.Join(defaultUploadsDir, fc.filename)
-
-	outputFilepath := fs.SelectUniqueNameForFile(fc.filename)
-	file, err := os.Create(outputFilepath)
+	file, err := os.OpenFile(fc.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -34,6 +35,5 @@ func (fc *FileConsumer) HandleBytes(data []byte) error {
 		return err
 	}
 
-	fmt.Println(data)
 	return nil
 }

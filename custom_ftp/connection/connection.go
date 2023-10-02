@@ -2,7 +2,6 @@ package connection
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
 	"main/ftp"
@@ -182,6 +181,5 @@ func (c *Connection) receiveResponse() (*ftp.FileTransferResponse, error) {
 	if err := proto.Unmarshal(message, &resp); err != nil {
 	}
 
-	fmt.Println(resp.GetSuccess())
 	return &resp, nil
 }

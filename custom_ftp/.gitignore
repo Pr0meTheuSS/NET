@@ -27,4 +27,4 @@ secrets.toml
 # Игнорируем файлы и папки, созданные при запуске Go
 .idea/
 .vscode/
-
+uploads/

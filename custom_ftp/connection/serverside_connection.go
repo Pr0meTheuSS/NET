@@ -2,7 +2,7 @@ package connection
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"main/ftp"
 	"net"
 )
@@ -25,7 +25,7 @@ type ServerSideConnection interface {
 
 type DataConsumer interface {
 	HandleBytes([]byte) error
-	HandleFileMetadata(File)
+	HandleFileMetadata(File) string
 }
 
 const (
@@ -75,7 +75,6 @@ func (ssc *ServerSideConnectionImpl) handleChunk(data []byte) error {
 }
 
 func (ssc *ServerSideConnectionImpl) GetAlreadyReadBytes() uint64 {
-	fmt.Println(ssc.conn.alreadyReadBytes)
 	return ssc.conn.alreadyReadBytes
 }
 
@@ -99,7 +98,7 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 	ssc.conn.chunkSizeBytes = defaultChunkSize
 	// handshake.ChunkSize = ssc.conn.chunkSizeBytes
 
-	ssc.consumer.HandleFileMetadata(File{
+	handshake.Filename = ssc.consumer.HandleFileMetadata(File{
 		Path:      handshake.Filename,
 		SizeBytes: handshake.TotalSize,
 	})
@@ -116,9 +115,7 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 }
 
 func (ssc *ServerSideConnectionImpl) receiveChunks() error {
-	fmt.Println("receive chunks")
-	for chunk, err := ssc.receiveChunk(); !ssc.isLoaded(); chunk, err = ssc.receiveChunk() {
-		fmt.Println("receive chunk")
+	for chunk, err := ssc.receiveChunk(); ; chunk, err = ssc.receiveChunk() {
 		if err != nil {
 			if err1 := ssc.sendResponse(&ftp.FileTransferResponse{Success: false}); err1 != nil {
 				return errors.Join(err, err1)
@@ -127,7 +124,12 @@ func (ssc *ServerSideConnectionImpl) receiveChunks() error {
 			return err
 		}
 
-		ssc.handleChunk(chunk.GetData())
+		if err := ssc.handleChunk(chunk.GetData()); err != nil {
+			log.Fatal(err)
+		}
+		if ssc.isLoaded() {
+			break
+		}
 	}
 
 	return nil

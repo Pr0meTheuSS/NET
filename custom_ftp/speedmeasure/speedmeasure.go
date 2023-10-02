@@ -22,7 +22,6 @@ func (sm *SpeedMeasurer) MeasureSpeed(traffic Traffic) {
 	diff := traffic.GetAlreadyReadBytes() - sm.alreadyReadBytes
 	sm.currentBPS = float64(diff) / float64(timeoutInSeconds)
 	sm.alreadyReadBytes += diff
-	fmt.Println(diff)
 	fmt.Println("Current Speed (bps):", sm.GetCurrentBPS())
 
 	go func() {
@@ -32,8 +31,7 @@ func (sm *SpeedMeasurer) MeasureSpeed(traffic Traffic) {
 				diff := traffic.GetAlreadyReadBytes() - sm.alreadyReadBytes
 				sm.currentBPS = float64(diff) / float64(timeoutInSeconds)
 				sm.alreadyReadBytes += diff
-				fmt.Println(diff)
-				fmt.Println("Current Speed (bps):", sm.GetCurrentBPS())
+				fmt.Printf("Current Speed (bps): %f\r", sm.GetCurrentBPS())
 			}
 		}
 	}()

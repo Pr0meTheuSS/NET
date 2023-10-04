@@ -6,32 +6,51 @@ import (
 )
 
 type SpeedMeasurer struct {
+	outputChannel    chan string
 	currentBPS       float64
-	alreadyReadBytes uint64
+	alreadyReadBytes int64
+	initTime         time.Time
+	trafficProvider  Traffic
 }
 
 type Traffic interface {
-	GetAlreadyReadBytes() uint64
+	GetAlreadyReadBytes() int64
 }
 
 const (
 	timeoutInSeconds = 3
 )
 
-func (sm *SpeedMeasurer) MeasureSpeed(traffic Traffic) {
-	diff := traffic.GetAlreadyReadBytes() - sm.alreadyReadBytes
-	sm.currentBPS = float64(diff) / float64(timeoutInSeconds)
-	sm.alreadyReadBytes += diff
-	fmt.Println("Current Speed (bps):", sm.GetCurrentBPS())
+type ConnectionTrafficInfo struct {
+	Speed    float64
+	AvgSpeed float64
+	Uptime   int64
+}
 
+func NewSpeedMeasurer(traffic Traffic, ch chan string) *SpeedMeasurer {
+	return &SpeedMeasurer{
+		outputChannel:    ch,
+		currentBPS:       0,
+		alreadyReadBytes: 0,
+		initTime:         time.Now(),
+		trafficProvider:  traffic,
+	}
+}
+
+func (sm *SpeedMeasurer) MeasureSpeed() {
 	go func() {
 		for {
 			select {
-			case <-time.After(time.Second * 1):
-				diff := traffic.GetAlreadyReadBytes() - sm.alreadyReadBytes
+			case <-time.After(time.Second * timeoutInSeconds):
+				alreadyReadBytes := sm.trafficProvider.GetAlreadyReadBytes()
+				if alreadyReadBytes < 0 {
+					return
+				}
+				diff := alreadyReadBytes - sm.alreadyReadBytes
 				sm.currentBPS = float64(diff) / float64(timeoutInSeconds)
-				sm.alreadyReadBytes += diff
-				fmt.Printf("Current Speed (bps): %f\r", sm.GetCurrentBPS())
+				sm.alreadyReadBytes = alreadyReadBytes
+
+				sm.outputChannel <- fmt.Sprintf("Speed: %f bps. avg: %f, uptime: %f s\r", sm.GetCurrentBPS(), sm.GetAverageBPS(), sm.GetTimeDeltaInSeconds())
 			}
 		}
 	}()
@@ -39,4 +58,12 @@ func (sm *SpeedMeasurer) MeasureSpeed(traffic Traffic) {
 
 func (sm *SpeedMeasurer) GetCurrentBPS() float64 {
 	return sm.currentBPS
+}
+
+func (sm *SpeedMeasurer) GetAverageBPS() float64 {
+	return float64(sm.alreadyReadBytes) / sm.GetTimeDeltaInSeconds()
+}
+
+func (sm *SpeedMeasurer) GetTimeDeltaInSeconds() float64 {
+	return time.Now().Sub(sm.initTime).Seconds()
 }

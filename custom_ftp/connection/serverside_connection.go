@@ -2,24 +2,12 @@ package connection
 
 import (
 	"errors"
-	"log"
 	"main/ftp"
 	"net"
 )
 
 type ServerSideConnection interface {
-	receiveHandshake() (*ftp.Handshake, error)
-	sendHandshake(*ftp.Handshake) error
-
-	receiveChunk() (*ftp.FileChunk, error)
-	handleChunk([]byte) error
-
-	sendResponse(*ftp.FileTransferResponse) error
-
-	GetAlreadyReadBytes() uint64
-
-	isLoaded() bool
-	close()
+	GetAlreadyReadBytes() int64
 	ServerServe() error
 }
 
@@ -74,17 +62,21 @@ func (ssc *ServerSideConnectionImpl) handleChunk(data []byte) error {
 	return ssc.consumer.HandleBytes(data)
 }
 
-func (ssc *ServerSideConnectionImpl) GetAlreadyReadBytes() uint64 {
-	return ssc.conn.alreadyReadBytes
+func (ssc *ServerSideConnectionImpl) GetAlreadyReadBytes() int64 {
+	if ssc.isLoaded() {
+		return -1
+	}
+
+	return int64(ssc.conn.alreadyReadBytes)
 }
 
-// func min(a, b uint32) uint32 {
-// 	if a < b {
-// 		return a
-// 	}
+func min(a, b uint32) uint32 {
+	if a < b {
+		return a
+	}
 
-// 	return b
-// }
+	return b
+}
 
 func (ssc *ServerSideConnectionImpl) ServerServe() error {
 	defer ssc.close()
@@ -95,8 +87,8 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 	}
 
 	ssc.conn.fileSizeBytes = handshake.TotalSize
-	ssc.conn.chunkSizeBytes = defaultChunkSize
-	// handshake.ChunkSize = ssc.conn.chunkSizeBytes
+	ssc.conn.chunkSizeBytes = min(maxAvailableChunkSize, handshake.ChunkSize)
+	handshake.ChunkSize = ssc.conn.chunkSizeBytes
 
 	handshake.Filename = ssc.consumer.HandleFileMetadata(File{
 		Path:      handshake.Filename,
@@ -108,7 +100,13 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 	}
 
 	if err := ssc.receiveChunks(); err != nil {
+		if err1 := ssc.sendResponse(&ftp.FileTransferResponse{Success: false}); err1 != nil {
+			return errors.Join(err, err1)
+		}
 		return err
+	}
+	if ssc.conn.alreadyReadBytes != ssc.conn.fileSizeBytes {
+		return ssc.sendResponse(&ftp.FileTransferResponse{Success: false})
 	}
 
 	return ssc.sendResponse(&ftp.FileTransferResponse{Success: true})
@@ -117,15 +115,11 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 func (ssc *ServerSideConnectionImpl) receiveChunks() error {
 	for chunk, err := ssc.receiveChunk(); ; chunk, err = ssc.receiveChunk() {
 		if err != nil {
-			if err1 := ssc.sendResponse(&ftp.FileTransferResponse{Success: false}); err1 != nil {
-				return errors.Join(err, err1)
-			}
-
 			return err
 		}
 
 		if err := ssc.handleChunk(chunk.GetData()); err != nil {
-			log.Fatal(err)
+			return err
 		}
 		if ssc.isLoaded() {
 			break

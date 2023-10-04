@@ -8,13 +8,6 @@ import (
 )
 
 type ClientSideConnection interface {
-	sendHandshake(*ftp.Handshake) error
-	receiveHandshake() (*ftp.Handshake, error)
-
-	sendChunk(*ftp.FileChunk) error
-	sendChunks() error
-
-	close()
 	ClientServe() error
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	datarepresenter "main/DataRepresenter"
 	"main/connection"
 	"main/speedmeasure"
 	"net"
@@ -50,10 +51,15 @@ func (s Server) serveConnections() error {
 		}
 
 		log.Println("Accept new connection from client")
+		dataRepresenter := datarepresenter.NewDataRepresenterCli()
 
-		c := connection.NewServerSideConnection(conn, &FileConsumer{})
-		sm := speedmeasure.SpeedMeasurer{}
-		sm.MeasureSpeed(c)
-		go c.ServerServe()
+		go func() {
+			c := connection.NewServerSideConnection(conn, &FileConsumer{})
+			ch := dataRepresenter.Register()
+			sm := speedmeasure.NewSpeedMeasurer(c, ch)
+			sm.MeasureSpeed()
+			c.ServerServe()
+			dataRepresenter.Unregister(ch)
+		}()
 	}
 }

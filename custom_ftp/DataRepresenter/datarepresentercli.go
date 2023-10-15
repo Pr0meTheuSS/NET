@@ -46,6 +46,7 @@ func (drcli *DataRepresenterCli) Represent() {
 					}
 
 					drcli.actualData[ch] = data
+					clearScreen()
 					for _, v := range drcli.actualData {
 						fmt.Println(v)
 					}
@@ -59,7 +60,6 @@ func (drcli *DataRepresenterCli) Represent() {
 }
 
 func (drcli *DataRepresenterCli) Register() chan string {
-	fmt.Println("Somebody registered")
 	ch := make(chan string)
 
 	drcli.mtx.Lock()

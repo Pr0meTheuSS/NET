@@ -105,6 +105,7 @@ func (ssc *ServerSideConnectionImpl) ServerServe() error {
 		}
 		return err
 	}
+
 	if ssc.conn.alreadyReadBytes != ssc.conn.fileSizeBytes {
 		return ssc.sendResponse(&ftp.FileTransferResponse{Success: false})
 	}

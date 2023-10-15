@@ -8,6 +8,7 @@ import (
 	"main/connection"
 	"main/speedmeasure"
 	"net"
+	"runtime"
 	"strconv"
 )
 
@@ -43,7 +44,9 @@ const (
 )
 
 func (s Server) serveConnections() error {
+	dataRepresenter := datarepresenter.NewDataRepresenterCli()
 	for {
+		fmt.Println("Goroutine amount:", runtime.NumGoroutine())
 		conn, err := s.listener.Accept()
 		if err != nil {
 			log.Println("Accept connection error:", err.Error())
@@ -51,15 +54,17 @@ func (s Server) serveConnections() error {
 		}
 
 		log.Println("Accept new connection from client")
-		dataRepresenter := datarepresenter.NewDataRepresenterCli()
 
 		go func() {
 			c := connection.NewServerSideConnection(conn, &FileConsumer{})
 			ch := dataRepresenter.Register()
+
 			sm := speedmeasure.NewSpeedMeasurer(c, ch)
 			sm.MeasureSpeed()
 			c.ServerServe()
 			dataRepresenter.Unregister(ch)
+			sm.Close()
 		}()
+		fmt.Println("Goroutine amount:", runtime.NumGoroutine())
 	}
 }

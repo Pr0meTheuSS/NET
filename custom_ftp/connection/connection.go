@@ -5,6 +5,7 @@ import (
 	"io"
 	"main/ftp"
 	"net"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -37,12 +38,13 @@ func (c *Connection) Close() {
 }
 
 func (c *Connection) Read(data []byte) (int, error) {
-	return c.connection.Read(data)
+	c.connection.SetReadDeadline(time.Now().Add(time.Second * time.Duration(c.timeoutSeconds)))
+	return io.ReadFull(c.connection, data)
 }
 
 func (c *Connection) receiveHandshake() (*ftp.Handshake, error) {
 	messageSizeBytes := make([]byte, 4)
-	_, err := io.ReadFull(c.connection, messageSizeBytes)
+	_, err := c.Read(messageSizeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +52,7 @@ func (c *Connection) receiveHandshake() (*ftp.Handshake, error) {
 	messageSize := binary.BigEndian.Uint32(messageSizeBytes)
 
 	message := make([]byte, messageSize)
-	_, err = io.ReadFull(c.connection, message)
+	_, err = c.Read(message)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +87,7 @@ func (c *Connection) sendHandshake(handshake *ftp.Handshake) error {
 
 func (c *Connection) receiveChunk() (*ftp.FileChunk, error) {
 	messageSizeBytes := make([]byte, 4)
-	_, err := io.ReadFull(c.connection, messageSizeBytes)
+	_, err := c.Read(messageSizeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (c *Connection) receiveChunk() (*ftp.FileChunk, error) {
 	messageSize := binary.BigEndian.Uint32(messageSizeBytes)
 
 	message := make([]byte, messageSize)
-	_, err = io.ReadFull(c.connection, message)
+	_, err = c.Read(message)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +138,7 @@ func (c *Connection) Write(data []byte) (int, error) {
 }
 
 func (c *Connection) isLoaded() bool {
-	return c.alreadyReadBytes >= c.fileSizeBytes
+	return c.alreadyReadBytes >= c.fileSizeBytes && c.alreadyReadBytes != 0
 }
 
 func (c *Connection) sendResponse(resp *ftp.FileTransferResponse) error {
@@ -161,7 +163,7 @@ func (c *Connection) sendResponse(resp *ftp.FileTransferResponse) error {
 
 func (c *Connection) receiveResponse() (*ftp.FileTransferResponse, error) {
 	messageSizeBytes := make([]byte, 4)
-	_, err := io.ReadFull(c.connection, messageSizeBytes)
+	_, err := c.Read(messageSizeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +171,7 @@ func (c *Connection) receiveResponse() (*ftp.FileTransferResponse, error) {
 	messageSize := binary.BigEndian.Uint32(messageSizeBytes)
 
 	message := make([]byte, messageSize)
-	_, err = io.ReadFull(c.connection, message)
+	_, err = c.Read(message)
 	if err != nil {
 		return nil, err
 	}

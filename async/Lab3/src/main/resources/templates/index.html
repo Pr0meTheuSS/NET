@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>My Spring Boot Page</title>
+</head>
+<body>
+    <h1>Welcome to my Spring Boot Page</h1>
+    
+    <ul>
+        <li th:each="item : ${items}">
+            <a th:href="'/info/' + ${item.placeId}" th:text="${item.placeName}">Item Link</a>
+        </li>
+    </ul>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Search</title>
+</head>
+<body>
+    <h1>Поиск места</h1>
+    
+    <form th:action="@{'/locations'}" method="get">
+        <label for="searchTerm">Введите название интересующего места:</label>
+        <input type="text" id="searchTerm" name="searchTerm" th:field="*{searchTerm.locationName}">
+        <button type="submit">Поиск</button>
+    </form>
+</body>
+</html>

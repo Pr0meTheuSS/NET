@@ -1,34 +1,7 @@
-package nsu.ru.Lab3.controllers;
+package nsu.ru.Lab3.LocationApi;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.List;
 
-public class LocationResponseDTO {
-    @JsonProperty("hits")
-    private Location[] hits;
-
-    @JsonProperty("locale")
-    private String locale;
-
-    public List <Location> getHits() {
-        return List.of(hits);
-    }
-
-    public void setHits(Location[] hits) {
-        this.hits = hits;
-    }
-
-    public String getLocale() {
-        return locale;
-    }
-
-    public void setLocale(String locale) {
-        this.locale = locale;
-    }
-}
-
-class Location {
-    @JsonIgnore
+public class Location {
     private Point point;
 
     public Point getPoint() {
@@ -137,22 +110,4 @@ class Location {
         this.postcode = postcode;
     }
 
-}
-
-class Point {
-    private String lat;
-    private String lng;
-
-    public String getLat() {
-        return lat;
-    }
-    public void setLat(String lat) {
-        this.lat = lat;
-    }
-    public String getLng() {
-        return lng;
-    }
-    public void setLng(String lng) {
-        this.lng = lng;
-    }
 }

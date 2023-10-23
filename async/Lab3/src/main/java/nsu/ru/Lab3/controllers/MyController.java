@@ -1,110 +1,150 @@
 package nsu.ru.Lab3.controllers;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
+import nsu.ru.Lab3.LocationApi.*;
+import nsu.ru.Lab3.PlacesApi.*;
+import nsu.ru.Lab3.WeatherApi.*;
 
 @Controller
 public class MyController {
+    // TODO: rename
+    private LocationResponseDTO places = null;
+ 
+    private WeatherApiIface weatherApiService = new WeatherApiImpl();
+    private LocationApiIface locationApiService = new LocationApiImpl();
+    private PlacesApiIface placesApiService = new PlacesApiImpl();
 
-    private final HttpClient httpClient;
-
-    public MyController() {
-        this.httpClient = HttpClient.newHttpClient();
+       @GetMapping("/search")
+    public String searchPage(Model model) {
+        // Create an instance of SearchTerm or set a value as needed
+        model.addAttribute("searchTerm", new SearchTerm());
+        return "search"; 
     }
 
-    @GetMapping("/my-page")
-    public String myPage(@RequestParam String locationName, Model model) {
-        ObjectMapper objectMapper = new ObjectMapper();        
-        String ret = fetchLocation(locationName);
-        LocationResponseDTO dto = new LocationResponseDTO();
+    @GetMapping("/locations")
+    public String locations(@RequestParam String locationName, Model model) {
         try {
-            dto =  objectMapper.readValue(ret, LocationResponseDTO.class);
-            System.out.println(dto);
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-        }
-
-        List<PlaceItem> itemList = new ArrayList<>();
-        for (Location l: dto.getHits()) {
-
-            String placeName = l.getCountry() + " " + l.getCity() + " " + l.getName();
-            placeName = placeName.replaceAll("null", "");
-
-            itemList.add(new PlaceItem(dto.getHits().indexOf(l), placeName));
-        }
-        model.addAttribute("items", itemList);
-
-        return "index";
-    }
-
-    // TODO: вынести в асинхронный вызов.
-    private String fetchLocation(String locationName) {
-        String url = prepareUrlForfetchingLocation(locationName);
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .build();
-
-        HttpResponse<String> resp;
-        try {
-            resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            return resp.body();
+            places = locationApiService.fetchLocations(locationName);
+            implaceLocationsIntoPage(places, model);
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
 
-        return "";
+        return "index";
     }
 
-    private String prepareUrlForfetchingLocation(String locationName) {
-        String encodedValue = "";
+
+    @GetMapping("/info/{id}")
+    public String myPageLocationsInfo(@PathVariable int id, Model model) {
         try {
-            encodedValue = URLEncoder.encode(locationName, "UTF-8");
-            System.out.println(encodedValue);
-        } catch (UnsupportedEncodingException e) {
+            if (places == null) {
+                return "error";
+            }
+
+            String lat = places.getHitsLat(id);
+            String lon = places.getHitsLon(id);
+            System.out.println("Before weather api call");
+            CompletableFuture<WeatherData> weatherFuture = CompletableFuture.supplyAsync(() -> {
+                // Асинхронный вызов для получения погоды
+                try {
+                    return weatherApiService.getWeatherAtPoint(lat, lon);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            System.out.println("After weather api call");
+
+            System.out.println("Before places in radius call");
+            CompletableFuture<PlacesDTO> placesDataFuture = CompletableFuture.supplyAsync(() -> {
+                // Асинхронный вызов для получения информации о местах
+                try {
+                    return placesApiService.fetchPlacesInRadius(lat, lon, "100");
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            System.out.println("Before map weather into view call");
+            CompletableFuture<WeatherView> weatherViewFuture = weatherFuture.thenApply(weather -> {
+                WeatherView wv = mapWeatherDTOtoView(weather);
+                return wv;
+            });
+
+            System.out.println("Before get description of places");
+            CompletableFuture<List<PlaceInfoView>> placeInfoViewsFuture = placesDataFuture.thenApply(data -> {
+                List<PlaceInfoView> placesInfoViews = new ArrayList<>();
+                for (Feature f : data.getFeatures()) {
+                    try {
+                        PlaceInfo p = placesApiService.fetchPlaceDescriptionByXid(f.getId());
+                        placesInfoViews.add(mapPlaceInfoTPlaceInfoView(p));
+                    } catch (Exception e) {
+                        // Обработка ошибок
+                        e.printStackTrace();
+                    }
+                }
+                return placesInfoViews;
+            });
+
+            CompletableFuture<Void> allOf = CompletableFuture.allOf(weatherFuture, placesDataFuture);
+
+            System.out.println("Before join");
+            allOf.join(); // Ждем завершения всех CompletableFuture
+
+            WeatherView wv = weatherViewFuture.join();
+            List<PlaceInfoView> placesInfoViews = placeInfoViewsFuture.join();
+
+            System.out.println("After join");
+
+            model.addAttribute("WeatherView", wv);
+            model.addAttribute("placeInfoList", placesInfoViews);
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
-        return "https://graphhopper.com/api/1/geocode?q=" + encodedValue + "&locale=ru&key=b21dcab5-cc27-472b-8a3e-d1eb62c38a04";
-    }
-}
-
-class PlaceItem {
-    private int placeId;
-    private String placeName;
-
-    public PlaceItem(int itemId, String placeName) {
-        this.placeId = itemId;
-        this.placeName = placeName;
+        return "info";
     }
 
-    public int getPlaceId() {
-        return placeId;
+    private void implaceLocationsIntoPage(LocationResponseDTO dto, Model model) {
+        List<PlaceView> itemList = new ArrayList<>();
+        for (Location l: dto.getHits()) {
+            String placeName = l.getCountry() + " " + l.getCity() + " " + l.getName();
+            placeName = placeName.replaceAll("null", "");
+
+            itemList.add(new PlaceView(dto.getHits().indexOf(l), placeName));
+        }
+        
+        model.addAttribute("items", itemList);
     }
 
-    public void setPlaceId(int itemId) {
-        this.placeId = itemId;
+    private WeatherView mapWeatherDTOtoView(WeatherData data) {
+        WeatherView ret = new WeatherView();
+
+        ret.setDescription(data.getDescription());
+        ret.setTemperature(String.valueOf(data.getTemp()));
+        ret.setMinTemperature(String.valueOf(data.getTempMin()));
+        ret.setMaxTemperature(String.valueOf(data.getTempMax()));
+        ret.setWindSpeed(String.valueOf(data.getWindSpeed()));
+
+        return ret;
     }
 
-    public String getPlaceName() {
-        return placeName;
-    }
+    private PlaceInfoView mapPlaceInfoTPlaceInfoView(PlaceInfo data) {
+        PlaceInfoView ret = new PlaceInfoView();
 
-    public void setPlaceName(String placeName) {
-        this.placeName = placeName;
+        ret.setName(data.getName());
+        ret.setAddress(data.getAddress());
+        ret.setKinds(data.getKinds());
+
+        return ret;
     }
 }

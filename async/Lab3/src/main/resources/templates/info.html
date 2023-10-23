@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Weather and Place Information</title>
+    <style>
+        /* Add styles for colors and basic formatting */
+        body {
+            font-family: Arial, sans-serif;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin-bottom: 10px;
+            color: #333; /* Text color */
+        }
+        strong {
+            color: #007BFF; /* Label color */
+        }
+        span {
+            color: #444; /* Data value color */
+        }
+    </style>
+</head>
+<body>
+    <h1>Weather Information</h1>
+    <ul>
+        <li><strong>Погода:</strong> <span th:text="${WeatherView.description}"></span></li>
+        <li><strong>Температура:</strong> <span th:text="${WeatherView.temperature}"></span> &#8451;</li>
+        <li><strong>Минимальная температура:</strong> <span th:text="${WeatherView.minTemperature}"></span> &#8451;</li>
+        <li><strong>Максимальная температура:</strong> <span th:text="${WeatherView.maxTemperature}"></span> &#8451;</li>
+        <li><strong>Скорость ветра:</strong> <span th:text="${WeatherView.windSpeed}"></span> м/с</li>
+    </ul>
+    
+    <h1>Информация о местах рядом</h1>
+    <ul>
+        <li th:each="placeInfo : ${placeInfoList}">
+            <strong>Название:</strong> <span th:text="${placeInfo.name}"></span>
+            <br>
+            <strong>Адрес:</strong> <span th:text="${placeInfo.address}"></span>
+            <br>
+            <strong>Категории:</strong> <span th:text="${placeInfo.kinds}"></span>
+            <hr>
+        </li>
+    </ul>
+</body>
+</html>

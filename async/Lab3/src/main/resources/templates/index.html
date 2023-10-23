@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome Page</title>
+</head>
+<body>
+    <h1>Добро пожаловать!</h1>   
+    <ul>
+        <li th:each="item : ${items}">
+            <a th:href="'/info/' + ${item.placeId}" th:text="${item.placeName}">Item Link</a>
+        </li>
+    </ul>
+</body>
+</html>

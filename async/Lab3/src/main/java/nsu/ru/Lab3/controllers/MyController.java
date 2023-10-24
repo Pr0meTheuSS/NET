@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -18,14 +19,18 @@ import nsu.ru.Lab3.WeatherApi.*;
 public class MyController {
     // TODO: rename
     private LocationResponseDTO places = null;
- 
-    private WeatherApiIface weatherApiService = new WeatherApiImpl();
-    private LocationApiIface locationApiService = new LocationApiImpl();
-    private PlacesApiIface placesApiService = new PlacesApiImpl();
+    
+    @Autowired
+    private WeatherApiIface weatherApiService;
 
-       @GetMapping("/search")
+    @Autowired
+    private LocationApiIface locationApiService;
+
+    @Autowired
+    private PlacesApiIface placesApiService;
+
+    @GetMapping("/search")
     public String searchPage(Model model) {
-        // Create an instance of SearchTerm or set a value as needed
         model.addAttribute("searchTerm", new SearchTerm());
         return "search"; 
     }
@@ -52,9 +57,38 @@ public class MyController {
 
             String lat = places.getHitsLat(id);
             String lon = places.getHitsLon(id);
+
+            System.out.println("Before places in radius call");
+
+            CompletableFuture<PlacesDTO> placesDataFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return placesApiService.fetchPlacesInRadius(lat, lon, "1000");
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            System.out.println("Before get description of places");
+            CompletableFuture<List<PlaceInfoView>> placeInfoViewsFuture = placesDataFuture.thenApply(data -> {
+                List<PlaceInfoView> placesInfoViews = new ArrayList<>();
+                int limit = 0;
+                for (Feature f : data.getFeatures()) {
+                    if (limit++ > 10) {
+                        break;
+                    }
+
+                    try {
+                        PlaceInfo p = placesApiService.fetchPlaceDescriptionByXid(f.getId());
+                        placesInfoViews.add(mapPlaceInfoTPlaceInfoView(p));
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                return placesInfoViews;
+            });
+
             System.out.println("Before weather api call");
             CompletableFuture<WeatherData> weatherFuture = CompletableFuture.supplyAsync(() -> {
-                // Асинхронный вызов для получения погоды
                 try {
                     return weatherApiService.getWeatherAtPoint(lat, lon);
                 } catch (Exception e) {
@@ -64,43 +98,13 @@ public class MyController {
 
             System.out.println("After weather api call");
 
-            System.out.println("Before places in radius call");
-            CompletableFuture<PlacesDTO> placesDataFuture = CompletableFuture.supplyAsync(() -> {
-                // Асинхронный вызов для получения информации о местах
-                try {
-                    return placesApiService.fetchPlacesInRadius(lat, lon, "100");
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
 
-            System.out.println("Before map weather into view call");
-            CompletableFuture<WeatherView> weatherViewFuture = weatherFuture.thenApply(weather -> {
-                WeatherView wv = mapWeatherDTOtoView(weather);
-                return wv;
-            });
-
-            System.out.println("Before get description of places");
-            CompletableFuture<List<PlaceInfoView>> placeInfoViewsFuture = placesDataFuture.thenApply(data -> {
-                List<PlaceInfoView> placesInfoViews = new ArrayList<>();
-                for (Feature f : data.getFeatures()) {
-                    try {
-                        PlaceInfo p = placesApiService.fetchPlaceDescriptionByXid(f.getId());
-                        placesInfoViews.add(mapPlaceInfoTPlaceInfoView(p));
-                    } catch (Exception e) {
-                        // Обработка ошибок
-                        e.printStackTrace();
-                    }
-                }
-                return placesInfoViews;
-            });
-
-            CompletableFuture<Void> allOf = CompletableFuture.allOf(weatherFuture, placesDataFuture);
+            CompletableFuture<Void> allOf = CompletableFuture.allOf(weatherFuture, placesDataFuture, placeInfoViewsFuture);
 
             System.out.println("Before join");
-            allOf.join(); // Ждем завершения всех CompletableFuture
+            allOf.join();
 
-            WeatherView wv = weatherViewFuture.join();
+            WeatherView wv = mapWeatherDTOtoView(weatherFuture.join());
             List<PlaceInfoView> placesInfoViews = placeInfoViewsFuture.join();
 
             System.out.println("After join");

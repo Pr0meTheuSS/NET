@@ -7,21 +7,33 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import nsu.ru.Lab3.Configs.Configs;
 import nsu.ru.Lab3.controllers.PlacesDTO;
 
+@Service
 public class PlacesApiImpl implements PlacesApiIface {
     private final HttpClient httpClient;
+    private String descriptionByXidUrl = "https://api.opentripmap.com/0.1/ru/places/xid/{xid}?apikey={apikey}";
+    private String fetchPlacesInRadiusUrl ="http://api.opentripmap.com/0.1/ru/places/radius?radius={radius}&lat={lat}&lon={lon}&format=geojson&apikey={apikey}";
+    private String apikey;
 
-    public PlacesApiImpl() {
+    @Autowired
+    public PlacesApiImpl(Configs cnfgs) {
+        apikey = cnfgs.getPlacesApiKey();
         this.httpClient = HttpClient.newHttpClient();
     }
 
     @Override
     public PlaceInfo fetchPlaceDescriptionByXid(String xid) throws IOException, InterruptedException {
-        String url = "https://api.opentripmap.com/0.1/ru/places/xid/" + xid + "?apikey=5ae2e3f221c38a28845f05b6571f62f3300e847fa60718705f4aad5d";
-        
+        String url = descriptionByXidUrl;
+        url = url.replace("{xid}", xid);
+        url = url.replace("{apikey}", apikey);
+        System.out.println(url);
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .build();
@@ -36,8 +48,13 @@ public class PlacesApiImpl implements PlacesApiIface {
 
     @Override
     public PlacesDTO fetchPlacesInRadius(String lat, String lon, String radius) throws IOException, InterruptedException{
-        String url = "http://api.opentripmap.com/0.1/ru/places/radius?radius=" + radius + "&lat=" + lat + 
-        "&lon=" + lon + "&format=geojson&apikey=5ae2e3f221c38a28845f05b6571f62f3300e847fa60718705f4aad5d";
+        String url = fetchPlacesInRadiusUrl;
+        url = url.replace("{lat}", lat);
+        url = url.replace("{lon}", lon);
+        url = url.replace("{radius}", radius);
+        url = url.replace("{apikey}", apikey);
+        System.out.println(url);
+
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .build();

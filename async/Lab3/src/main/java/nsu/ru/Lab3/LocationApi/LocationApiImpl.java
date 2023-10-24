@@ -6,15 +6,25 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import java.net.URLEncoder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import nsu.ru.Lab3.Configs.Configs;
 
+@Service
 public class LocationApiImpl implements LocationApiIface {
-        private final HttpClient httpClient;
-    
-    public LocationApiImpl() {
+    private final HttpClient httpClient;
+    private String fetchLocationsUrl = "https://graphhopper.com/api/1/geocode?q={locationName}&locale=ru&key={apikey}";
+    private String apikey;
+
+    @Autowired
+    public LocationApiImpl(Configs cnfgs) {
+        apikey = cnfgs.getLocationsApiKey();
         this.httpClient = HttpClient.newHttpClient();
     }
 
@@ -42,10 +52,10 @@ public class LocationApiImpl implements LocationApiIface {
     }
 
     private String prepareUrlForfetchingLocation(String locationName) throws UnsupportedEncodingException {
-        String encodedValue = "";
-        encodedValue = URLEncoder.encode(locationName, "UTF-8");
-        System.out.println(encodedValue);
-
-        return "https://graphhopper.com/api/1/geocode?q=" + encodedValue + "&locale=ru&key=b21dcab5-cc27-472b-8a3e-d1eb62c38a04";
+        String encodedLocationName = URLEncoder.encode(locationName, "UTF-8");
+        String url = fetchLocationsUrl;
+        url = url.replace("{locationName}", encodedLocationName);
+        url = url.replace("{apikey}", apikey);
+        return url;
     }
 }

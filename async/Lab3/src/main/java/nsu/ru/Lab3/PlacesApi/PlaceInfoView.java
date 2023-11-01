@@ -14,15 +14,19 @@ public class PlaceInfoView {
     }
 
     public String getAddress() {
-        String ret = address.getCity() + " " + address.getState();
-        if (address.getRoad() != null && address.getRoad() != "") {
-            ret += address.getRoad() + " ";
-        }
-        if (address.getHouse_number() != null && address.getHouse_number() != "") {
-            ret += address.getHouse_number() + " ";
+        if (address == null) {
+            return "";
         }
 
-        return ret;
+        String ret = address.getCity() + " " + address.getState();
+        if (address.getRoad() != null && address.getRoad() != "") {
+            ret +=  " " + address.getRoad() + " ";
+        }
+        if (address.getHouse_number() != null && address.getHouse_number() != "") {
+            ret += " " + address.getHouse_number() + " ";
+        }
+
+        return ret.replace("  ", " ");
     }
 
     public void setAddress(Address address) {

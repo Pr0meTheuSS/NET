@@ -6,10 +6,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import nsu.ru.Lab3.Configs.Configs;
@@ -29,7 +31,7 @@ public class PlacesApiImpl implements PlacesApiIface {
     }
 
     @Override
-    public PlaceInfo fetchPlaceDescriptionByXid(String xid) throws IOException, InterruptedException {
+    public CompletableFuture<PlaceInfo> fetchPlaceDescriptionByXid(String xid) throws IOException, InterruptedException {
         String url = descriptionByXidUrl;
         url = url.replace("{xid}", xid);
         url = url.replace("{apikey}", apikey);
@@ -38,16 +40,20 @@ public class PlacesApiImpl implements PlacesApiIface {
             .uri(URI.create(url))
             .build();
         
-        HttpResponse<String> resp;
-        resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println(resp.body());
-
-        ObjectMapper objectMapper = new ObjectMapper();
-        return objectMapper.readValue(resp.body(), PlaceInfo.class);
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenApply(resp -> {
+                        ObjectMapper objectMapper = new ObjectMapper();
+                        try {
+                            return objectMapper.readValue(resp.body(), PlaceInfo.class);
+                        } catch (JsonProcessingException e) {
+                            e.printStackTrace();
+                            return null;
+                        }
+                    });
     }
 
     @Override
-    public PlacesDTO fetchPlacesInRadius(String lat, String lon, String radius) throws IOException, InterruptedException{
+    public CompletableFuture<PlacesDTO> fetchPlacesInRadius(String lat, String lon, String radius) throws IOException, InterruptedException{
         String url = fetchPlacesInRadiusUrl;
         url = url.replace("{lat}", lat);
         url = url.replace("{lon}", lon);
@@ -59,10 +65,15 @@ public class PlacesApiImpl implements PlacesApiIface {
             .uri(URI.create(url))
             .build();
         
-        HttpResponse<String> resp;
-        resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-        ObjectMapper objectMapper = new ObjectMapper();
-        return objectMapper.readValue(resp.body(), PlacesDTO.class);
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenApply(resp -> {
+                        ObjectMapper objectMapper = new ObjectMapper();
+                        try {
+                            return objectMapper.readValue(resp.body(), PlacesDTO.class);
+                        } catch (JsonProcessingException e) {
+                            e.printStackTrace();
+                            return null;
+                        }
+                    });
     }
 }

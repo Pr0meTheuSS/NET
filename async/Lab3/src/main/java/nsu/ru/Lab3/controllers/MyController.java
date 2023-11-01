@@ -10,14 +10,12 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
-
 import nsu.ru.Lab3.LocationApi.*;
 import nsu.ru.Lab3.PlacesApi.*;
 import nsu.ru.Lab3.WeatherApi.*;
 
 @Controller
 public class MyController {
-    // TODO: rename
     private LocationResponseDTO places = null;
     
     @Autowired
@@ -38,7 +36,7 @@ public class MyController {
     @GetMapping("/locations")
     public String locations(@RequestParam String locationName, Model model) {
         try {
-            places = locationApiService.fetchLocations(locationName);
+            places = locationApiService.fetchLocations(locationName).join();
             implaceLocationsIntoPage(places, model);
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
@@ -46,7 +44,6 @@ public class MyController {
 
         return "index";
     }
-
 
     @GetMapping("/info/{id}")
     public String myPageLocationsInfo(@PathVariable int id, Model model) {
@@ -60,41 +57,32 @@ public class MyController {
 
             System.out.println("Before places in radius call");
 
-            CompletableFuture<PlacesDTO> placesDataFuture = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return placesApiService.fetchPlacesInRadius(lat, lon, "1000");
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            CompletableFuture<PlacesDTO> placesDataFuture = placesApiService.fetchPlacesInRadius(lat, lon, "1000");
 
             System.out.println("Before get description of places");
-            CompletableFuture<List<PlaceInfoView>> placeInfoViewsFuture = placesDataFuture.thenApply(data -> {
-                List<PlaceInfoView> placesInfoViews = new ArrayList<>();
-                int limit = 0;
-                for (Feature f : data.getFeatures()) {
-                    if (limit++ > 10) {
-                        break;
+            CompletableFuture <List<CompletableFuture<PlaceInfo>>> placeInfoViewsFuture = placesDataFuture
+                .thenApply(data -> {
+                    List<CompletableFuture<PlaceInfo>> placesInfoViews = new ArrayList<>();
+
+                    int limit = 0;
+                    for (Feature f : data.getFeatures()) {
+                        if (limit++ > 10) {
+                            break;
+                        }
+
+                        try {
+                            CompletableFuture<PlaceInfo> p = placesApiService.fetchPlaceDescriptionByXid(f.getId());
+                            placesInfoViews.add(p);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     }
 
-                    try {
-                        PlaceInfo p = placesApiService.fetchPlaceDescriptionByXid(f.getId());
-                        placesInfoViews.add(mapPlaceInfoTPlaceInfoView(p));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-                return placesInfoViews;
+                    return placesInfoViews;
             });
 
             System.out.println("Before weather api call");
-            CompletableFuture<WeatherData> weatherFuture = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return weatherApiService.getWeatherAtPoint(lat, lon);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            CompletableFuture<WeatherData> weatherFuture = weatherApiService.getWeatherAtPoint(lat, lon);
 
             System.out.println("After weather api call");
 
@@ -105,12 +93,18 @@ public class MyController {
             allOf.join();
 
             WeatherView wv = mapWeatherDTOtoView(weatherFuture.join());
-            List<PlaceInfoView> placesInfoViews = placeInfoViewsFuture.join();
 
-            System.out.println("After join");
+            List<CompletableFuture<PlaceInfo>> placesInfoViews = placeInfoViewsFuture.join();
+            List<PlaceInfoView> views = placesInfoViews
+                .stream()
+                .map(CompletableFuture::join)
+                .map(pi -> mapPlaceInfoToPlaceInfoView(pi))
+                .toList();
+
+                System.out.println("After join");
 
             model.addAttribute("WeatherView", wv);
-            model.addAttribute("placeInfoList", placesInfoViews);
+            model.addAttribute("placeInfoList", views);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -142,7 +136,7 @@ public class MyController {
         return ret;
     }
 
-    private PlaceInfoView mapPlaceInfoTPlaceInfoView(PlaceInfo data) {
+    private PlaceInfoView mapPlaceInfoToPlaceInfoView(PlaceInfo data) {
         PlaceInfoView ret = new PlaceInfoView();
 
         ret.setName(data.getName());

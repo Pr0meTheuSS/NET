@@ -9,9 +9,13 @@ import java.net.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import nsu.ru.Lab3.Configs.Configs;
+
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class WeatherApiImpl implements WeatherApiIface {
@@ -27,23 +31,29 @@ public class WeatherApiImpl implements WeatherApiIface {
     }
 
     @Override
-    public WeatherData getWeatherAtPoint(String lat, String lon) throws IOException, InterruptedException {
-        try {
-            String url = getWeatherAtPointUrl;
-            url = url.replace("{lat}", lat);
-            url = url.replace("{lon}", lon);
-            url = url.replace("{apikey}", apikey);
-            System.out.println("Weather url: " + url);
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .build();
-            HttpResponse<String> resp;
-            resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    public CompletableFuture<WeatherData> getWeatherAtPoint(String lat, String lon) throws IOException, InterruptedException {
+        String url = getWeatherAtPointUrl;
+        url = url.replace("{lat}", lat);
+        url = url.replace("{lon}", lon);
+        url = url.replace("{apikey}", apikey);
+        System.out.println("Weather url: " + url);
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .build();
 
-            ObjectMapper objectMapper = new ObjectMapper();
-            return objectMapper.readValue(resp.body(), WeatherData.class);
-        } catch (IOException | InterruptedException e) {
-           throw e;
-        }    
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                        .thenApply(x -> {
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    try {
+                        return objectMapper.readValue(x.body(), WeatherData.class);
+                    } catch (JsonMappingException e) {
+                        e.printStackTrace();
+                        return null;
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                        return null;
+                    }
+                });
+
     }    
 }

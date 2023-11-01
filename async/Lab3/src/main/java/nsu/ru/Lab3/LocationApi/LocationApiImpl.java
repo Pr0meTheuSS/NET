@@ -6,13 +6,16 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.net.URLEncoder;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.net.URLEncoder;
 
 import nsu.ru.Lab3.Configs.Configs;
 
@@ -27,28 +30,26 @@ public class LocationApiImpl implements LocationApiIface {
         apikey = cnfgs.getLocationsApiKey();
         this.httpClient = HttpClient.newHttpClient();
     }
-
-    @Override
-    public LocationResponseDTO fetchLocations(String locationName) throws IOException, InterruptedException {
-        ObjectMapper objectMapper = new ObjectMapper();
-        String ret;
-        try {
-            ret = fetchLocation(locationName);
-            return objectMapper.readValue(ret, LocationResponseDTO.class);
-        } catch (IOException | InterruptedException e) {
-            throw e;
-        }
-    }
     
-    private String fetchLocation(String locationName) throws IOException, InterruptedException {
+    public CompletableFuture<LocationResponseDTO> fetchLocations(String locationName) throws IOException, InterruptedException {
         String url = prepareUrlForfetchingLocation(locationName);
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .build();
 
-        HttpResponse<String> resp;
-        resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        return resp.body();
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(x -> {
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    try {
+                        return objectMapper.readValue(x.body(), LocationResponseDTO.class);
+                    } catch (JsonMappingException e) {
+                        e.printStackTrace();
+                        return null;
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                        return null;
+                    }
+                });
     }
 
     private String prepareUrlForfetchingLocation(String locationName) throws UnsupportedEncodingException {

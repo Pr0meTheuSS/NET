@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	multicastGroupIPv4 = "224.0.0.1"
-	port               = 9876
+	multicastGroupIPv4 = "239.192.0.4"
+	port               = 9192
 )
 
 func init() {
@@ -75,6 +75,7 @@ func main() {
 	if len(os.Args) > 1 {
 		multicastGroup = os.Args[1]
 	}
+
 	conn, err := net.ListenPacket("udp", multicastGroup+":"+strconv.Itoa(port))
 	if err != nil {
 		fmt.Println(err)

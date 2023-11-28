@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -55,53 +55,48 @@ public class MyController {
             String lat = places.getHitsLat(id);
             String lon = places.getHitsLon(id);
 
-            System.out.println("Before places in radius call");
-
             CompletableFuture<PlacesDTO> placesDataFuture = placesApiService.fetchPlacesInRadius(lat, lon, "1000");
 
-            System.out.println("Before get description of places");
-            CompletableFuture <List<CompletableFuture<PlaceInfo>>> placeInfoViewsFuture = placesDataFuture
-                .thenApply(data -> {
-                    List<CompletableFuture<PlaceInfo>> placesInfoViews = new ArrayList<>();
-
-                    int limit = 0;
-                    for (Feature f : data.getFeatures()) {
-                        if (limit++ > 10) {
-                            break;
-                        }
-
-                        try {
-                            CompletableFuture<PlaceInfo> p = placesApiService.fetchPlaceDescriptionByXid(f.getId());
-                            placesInfoViews.add(p);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+            CompletableFuture<List<PlaceInfo>> placeInfoViewsFuture = placesDataFuture
+            .thenCompose(data -> {
+                List<CompletableFuture<PlaceInfo>> placesInfoViews = new ArrayList<>();
+        
+                int limit = 0;
+                for (Feature f : data.getFeatures()) {
+                    if (limit++ > 10) {
+                        break;
                     }
-
-                    return placesInfoViews;
+        
+                    try {
+                        CompletableFuture<PlaceInfo> p = placesApiService.fetchPlaceDescriptionByXid(f.getId());
+                        placesInfoViews.add(p);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+        
+                CompletableFuture<Void> allOfFuture = CompletableFuture.allOf(placesInfoViews.toArray(new CompletableFuture[0]));
+        
+                return allOfFuture.thenApply(v ->
+                    placesInfoViews.stream()
+                        .map(CompletableFuture::join)
+                        .collect(Collectors.toList())
+                );
             });
 
-            System.out.println("Before weather api call");
             CompletableFuture<WeatherData> weatherFuture = weatherApiService.getWeatherAtPoint(lat, lon);
 
-            System.out.println("After weather api call");
+            CompletableFuture<Void> allOf = CompletableFuture.allOf(weatherFuture, placeInfoViewsFuture);
 
-
-            CompletableFuture<Void> allOf = CompletableFuture.allOf(weatherFuture, placesDataFuture, placeInfoViewsFuture);
-
-            System.out.println("Before join");
             allOf.join();
 
             WeatherView wv = mapWeatherDTOtoView(weatherFuture.join());
 
-            List<CompletableFuture<PlaceInfo>> placesInfoViews = placeInfoViewsFuture.join();
+            List<PlaceInfo> placesInfoViews = placeInfoViewsFuture.join();
             List<PlaceInfoView> views = placesInfoViews
                 .stream()
-                .map(CompletableFuture::join)
                 .map(pi -> mapPlaceInfoToPlaceInfoView(pi))
                 .toList();
-
-                System.out.println("After join");
 
             model.addAttribute("WeatherView", wv);
             model.addAttribute("placeInfoList", views);

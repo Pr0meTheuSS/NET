@@ -33,8 +33,8 @@ func NewWebSnakeNormalNode(username string) *webSnakeNormalNode {
 	log.Println("Local address:", conn.LocalAddr())
 
 	// log.Println("Recv Announcement message")
-	mcastgroup := "239.192.0.4"
-	port := 9192
+	mcastgroup := "224.0.0.1"
+	port := 8888
 	mcastConn, err := createMulticastJoinedConnection(mcastgroup, port, "wlp2s0")
 	if err != nil {
 		log.Println("Catch error when create multicast packet connection:", err)

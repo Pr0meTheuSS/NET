@@ -61,10 +61,17 @@ var DirToNetDir = map[snake.Direction]websnake.Direction{
 
 func playerToNetSnake(p game.Player) *websnake.GameState_Snake {
 	netCoords := []*websnake.GameState_Coord{}
-	for i := range p.Snake.Body {
+	netCoords = append(netCoords, &websnake.GameState_Coord{
+		X: &p.Snake.Body[0].X,
+		Y: &p.Snake.Body[0].Y,
+	})
+
+	for i, curr := range p.Snake.Body[1:] {
+		x := curr.X - p.Snake.Body[i].X
+		y := curr.Y - p.Snake.Body[i].Y
 		netCoords = append(netCoords, &websnake.GameState_Coord{
-			X: &p.Snake.Body[i].X,
-			Y: &p.Snake.Body[i].Y,
+			X: &x,
+			Y: &y,
 		})
 	}
 
@@ -204,8 +211,8 @@ func (w *webSnakeMasterNode) SendMultiAnnouncment() {
 		log.Println("Catch err:", err)
 		os.Exit(1)
 	}
-	addr := "239.192.0.4"
-	port := 9192
+	addr := "224.0.0.1"
+	port := 8888
 
 	for {
 		updTimer := time.NewTimer(time.Second)

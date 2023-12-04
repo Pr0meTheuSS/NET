@@ -7,6 +7,7 @@ import (
 	"main/pubsub"
 	"main/snake"
 	"main/websnake"
+	"math"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -96,7 +97,7 @@ func (g *Game) updateGameState(message pubsub.Message) {
 	log.Println("Update game by message ------------------------")
 	defer log.Println("----------------------Update is over")
 
-	updatedGame := GameStateToGame(message.Msg.GetState().State)
+	updatedGame := g.GameStateToGame(message.Msg.GetState().State)
 	g.Players = updatedGame.Players
 	g.Food = updatedGame.Food
 	log.Println(g)
@@ -126,27 +127,42 @@ var netDirToModel = map[websnake.Direction]snake.Direction{
 	websnake.Direction_RIGHT: snake.RIGHT,
 }
 
+func snakePartLength(coord *websnake.GameState_Coord) int32 {
+	ret := int32(math.Max(math.Abs(float64(coord.GetX())), math.Abs(float64(coord.GetY()))))
+	log.Println(ret)
+	return ret
+}
+
 // GameState_Snake to Snake
-func GameStateSnakeToSnake(gsSnake *websnake.GameState_Snake) *snake.Snake {
+func (g *Game) GameStateSnakeToSnake(gsSnake *websnake.GameState_Snake) *snake.Snake {
 	body := []geometry.Position{}
-	for _, coord := range gsSnake.GetPoints() {
+
+	head := geometry.Position{
+		X: gsSnake.Points[0].GetX(),
+		Y: gsSnake.Points[0].GetY(),
+	}
+
+	body = append(body, head)
+
+	for _, curDirection := range gsSnake.GetPoints()[1:] {
+		prev := body[len(body)-1]
 		body = append(body, geometry.Position{
-			X: *coord.X,
-			Y: *coord.Y,
+			X: (prev.X + curDirection.GetX() + g.GridSize.Width) % g.GridSize.Width,
+			Y: (prev.Y + curDirection.GetY() + g.GridSize.Height) % g.GridSize.Height,
 		})
 	}
 
 	snake := &snake.Snake{
 		Body:    body,
 		Dir:     netDirToModel[*gsSnake.HeadDirection],
-		IsAlive: gsSnake.State == websnake.GameState_Snake_ALIVE.Enum(),
+		IsAlive: gsSnake.GetState() == websnake.GameState_Snake_ALIVE,
 	}
-
+	log.Println(snake.Body)
 	return snake
 }
 
 // GameState to Game
-func GameStateToGame(gs *websnake.GameState) *Game {
+func (g *Game) GameStateToGame(gs *websnake.GameState) *Game {
 	gamePlayers := gs.Players.Players
 	players := map[int32]*Player{}
 	gameSnakes := gs.Snakes
@@ -157,7 +173,7 @@ func GameStateToGame(gs *websnake.GameState) *Game {
 	}
 
 	for _, gameSnake := range gameSnakes {
-		newSnake := GameStateSnakeToSnake(gameSnake)
+		newSnake := g.GameStateSnakeToSnake(gameSnake)
 		players[*gameSnake.PlayerId].Snake = newSnake
 	}
 

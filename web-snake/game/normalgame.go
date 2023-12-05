@@ -15,12 +15,9 @@ import (
 
 var gameslist = map[string]*websnake.GameAnnouncement{}
 var mtx sync.RWMutex
-var uname = ""
 
-func ChooseGame(app fyne.App, username string) {
-	uname = username
+func ChooseGame(app fyne.App, ch chan Game) {
 	chooseGame := app.NewWindow("Choose Game")
-
 	chooseGame.Resize(fyne.NewSize(800, 800))
 	chooseGame.SetFixedSize(true)
 	chooseGame.CenterOnScreen()
@@ -37,22 +34,11 @@ func ChooseGame(app fyne.App, username string) {
 
 	pubsub.GetGlobalPubSubService().Subscribe("announce", announceSub)
 
-	// Subscribe to event messages abount ack
-	ackSub := pubsub.Subscriber{
-		EventChannel: make(chan string),
-		EventHandler: func(msg pubsub.Message) {
-			log.Println("Receive ack and set main player id as receiver id from message")
-			thisGame.mainPlayerId = *msg.Msg.ReceiverId
-		},
-	}
-
-	pubsub.GetGlobalPubSubService().Subscribe("ack", ackSub)
-
 	isChoosing := true
 	chooseGame.SetOnClosed(func() { isChoosing = false })
 	chooseGame.Show()
 	for isChoosing {
-		UpdateChooseGameWindow(app, chooseGame)
+		UpdateChooseGameWindow(app, chooseGame, ch)
 		chooseGame.Canvas().Refresh(chooseGame.Canvas().Content())
 		time.Sleep(time.Second)
 	}
@@ -66,18 +52,20 @@ func UpdateGamesList(game *websnake.GameAnnouncement) {
 	}
 }
 
-func UpdateChooseGameWindow(application fyne.App, win fyne.Window) {
-	win.SetContent(container.NewVBox(getButtonsToConenctWithGame(application)...))
+func UpdateChooseGameWindow(application fyne.App, win fyne.Window, ch chan Game) {
+	win.SetContent(container.NewVBox(getButtonsToConenctWithGame(application, ch)...))
 }
 
 var thisGame = &Game{}
 
-func getButtonsToConenctWithGame(application fyne.App) []fyne.CanvasObject {
+func getButtonsToConenctWithGame(application fyne.App, ch chan Game) []fyne.CanvasObject {
 	btns := []fyne.CanvasObject{}
 	mtx.RLock()
 	for k, v := range gameslist {
 		btns = append(btns, widget.NewButton(k, func() {
 			log.Println("Choose to connection")
+
+			ch <- *CreateGame(application, *v.GameName, *v.GameName, *v.Config.Width, *v.Config.Height, *v.Config.FoodStatic, *v.Config.StateDelayMs)
 
 			masterUDPAddr := getMasterAddressFromAnnounce(v)
 			pubsub.GetGlobalPubSubService().Publish("connection", pubsub.Message{
@@ -94,7 +82,6 @@ func getButtonsToConenctWithGame(application fyne.App) []fyne.CanvasObject {
 				From: nil,
 				To:   masterUDPAddr,
 			})
-			thisGame = CreateGame(application, *v.GameName, *v.GameName, *v.Config.Width, *v.Config.Height, *v.Config.FoodStatic, *v.Config.StateDelayMs)
 		}))
 	}
 	mtx.RUnlock()

@@ -81,6 +81,10 @@ func (s *Snake) Head() geometry.Position {
 }
 
 func (s *Snake) Move() {
+	if !s.IsAlive {
+		return
+	}
+
 	head := s.Body[0]
 	s.prevTail = s.Body[len(s.Body)-1]
 

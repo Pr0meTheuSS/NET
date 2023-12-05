@@ -14,19 +14,23 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type webSnakeMasterNode struct {
+type WebSnakeMasterNode struct {
 	conn *net.UDPConn
 	game *game.Game
 }
 
-func NewWebSnakeMasterNode(game *game.Game) *webSnakeMasterNode {
+func (w *WebSnakeMasterNode) Run() {
+	go w.SendMultiAnnouncment()
+	go w.ListenAndServe()
+}
+
+func NewWebSnakeMasterNode(game *game.Game) *WebSnakeMasterNode {
 	conn, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Local address:", conn.LocalAddr())
 
-	node := &webSnakeMasterNode{
+	node := &WebSnakeMasterNode{
 		conn: conn,
 		game: game,
 	}
@@ -88,12 +92,16 @@ func playerToNetSnake(p game.Player) *websnake.GameState_Snake {
 
 }
 
-var stateOrder = int32(0)
+var seq = int64(-1)
 
-func (w *webSnakeMasterNode) sendGameState(message pubsub.Message) {
+func generateSeq() int64 {
+	seq++
+	return seq
+}
+
+func (w *WebSnakeMasterNode) sendGameState(message pubsub.Message) {
 	log.Println("Send gamestate----------------------------")
 	defer log.Println("----------------------------Gamestate sent")
-	stateOrder++
 
 	netPlayers := []*websnake.GamePlayer{}
 	for _, player := range w.game.Players {
@@ -110,14 +118,14 @@ func (w *webSnakeMasterNode) sendGameState(message pubsub.Message) {
 	}
 
 	netFood := []*websnake.GameState_Coord{}
-	for _, f := range w.game.Food {
+	for i := range w.game.Food {
 		netFood = append(netFood, &websnake.GameState_Coord{
-			X: &f.X,
-			Y: &f.Y,
+			X: &w.game.Food[i].X,
+			Y: &w.game.Food[i].Y,
 		})
 	}
 
-	seq := int64(1)
+	seq := generateSeq()
 	msg := websnake.GameMessage{
 		MsgSeq:     &seq,
 		SenderId:   new(int32),
@@ -125,10 +133,9 @@ func (w *webSnakeMasterNode) sendGameState(message pubsub.Message) {
 		Type: &websnake.GameMessage_State{
 			State: &websnake.GameMessage_StateMsg{
 				State: &websnake.GameState{
-					StateOrder: &stateOrder,
-					Snakes:     netSnakes,
-					Foods:      netFood,
-					Players:    netGamePlayers,
+					Snakes:  netSnakes,
+					Foods:   netFood,
+					Players: netGamePlayers,
 				},
 			},
 		},
@@ -152,7 +159,7 @@ func (w *webSnakeMasterNode) sendGameState(message pubsub.Message) {
 	}
 }
 
-func (w *webSnakeMasterNode) DestroyNode() {
+func (w *WebSnakeMasterNode) DestroyNode() {
 	w.conn.Close()
 }
 
@@ -191,37 +198,37 @@ func createAnnounce(game game.Game) websnake.GameAnnouncement {
 }
 
 // Run in goroutine.
-func (w *webSnakeMasterNode) SendMultiAnnouncment() {
-	// log.Println("Send Announcement message")
-	// defer log.Println("---------------------------------------Announce message sent.")
+func (w *WebSnakeMasterNode) SendMultiAnnouncment() {
+	log.Println("Send Announcement message")
+	defer log.Println("---------------------------------------Announce message sent.")
 
-	announce := createAnnounce(*w.game)
-	msg := websnake.GameMessage{
-		MsgSeq:     new(int64),
-		SenderId:   new(int32),
-		ReceiverId: new(int32),
-		Type: &websnake.GameMessage_Announcement{
-			Announcement: &websnake.GameMessage_AnnouncementMsg{
-				Games: []*websnake.GameAnnouncement{&announce},
-			},
-		},
-	}
-	data, err := proto.Marshal(&msg)
-	if nil != err {
-		log.Println("Catch err:", err)
-		os.Exit(1)
-	}
 	addr := "224.0.0.1"
 	port := 8888
 
 	for {
+		announce := createAnnounce(*w.game)
+		msg := websnake.GameMessage{
+			MsgSeq:     new(int64),
+			SenderId:   new(int32),
+			ReceiverId: new(int32),
+			Type: &websnake.GameMessage_Announcement{
+				Announcement: &websnake.GameMessage_AnnouncementMsg{
+					Games: []*websnake.GameAnnouncement{&announce},
+				},
+			},
+		}
+		data, err := proto.Marshal(&msg)
+		if nil != err {
+			log.Println("Catch err:", err)
+			os.Exit(1)
+		}
 		updTimer := time.NewTimer(time.Second)
 		<-updTimer.C
 		w.SendMulticast(data, addr, port)
 	}
 }
 
-func (w *webSnakeMasterNode) SendTo(data []byte, to *net.UDPAddr) {
+func (w *WebSnakeMasterNode) SendTo(data []byte, to *net.UDPAddr) {
 	log.Println("Send Unicast message to ", to.String())
 	defer log.Println("---------------------------------------Unicast message sent.")
 
@@ -231,7 +238,7 @@ func (w *webSnakeMasterNode) SendTo(data []byte, to *net.UDPAddr) {
 	}
 }
 
-func (w *webSnakeMasterNode) SendMulticast(data []byte, addr string, port int) {
+func (w *WebSnakeMasterNode) SendMulticast(data []byte, addr string, port int) {
 	log.Println("Send Multicast message to ", w.conn.LocalAddr().Network())
 	defer log.Println("---------------------------------------Multicast message sent.")
 
@@ -247,7 +254,7 @@ func (w *webSnakeMasterNode) SendMulticast(data []byte, addr string, port int) {
 	}
 }
 
-func (w *webSnakeMasterNode) ListenAndServe() {
+func (w *WebSnakeMasterNode) ListenAndServe() {
 	log.Println("Master udp conn addr:", w.conn.LocalAddr().String())
 
 	for {
@@ -293,18 +300,18 @@ func (w *webSnakeMasterNode) ListenAndServe() {
 	}
 }
 
-func (w *webSnakeMasterNode) handleJoin(eventMessage pubsub.Message) {
+func (w *WebSnakeMasterNode) handleJoin(eventMessage pubsub.Message) {
 	log.Println("Read from udp socket in master:", eventMessage)
 	pubsub.GetGlobalPubSubService().Publish("join", eventMessage)
 }
 
-func (w *webSnakeMasterNode) handleSteer(eventMessage pubsub.Message) {
+func (w *WebSnakeMasterNode) handleSteer(eventMessage pubsub.Message) {
 	log.Println("Read from udp socket in master:", eventMessage)
 	pubsub.GetGlobalPubSubService().Publish("steer", eventMessage)
 }
 
-func (w *webSnakeMasterNode) sendAck(msg pubsub.Message) {
-	log.Println("----------------------------send ack")
+func (w *WebSnakeMasterNode) sendAck(msg pubsub.Message) {
+	log.Println("----------------------------send ack", msg.Msg)
 	defer log.Println("----------------------sent ack")
 
 	data, err := proto.Marshal(msg.Msg)

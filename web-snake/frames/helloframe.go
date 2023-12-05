@@ -1,6 +1,7 @@
 package frames
 
 import (
+	"log"
 	"main/game"
 	"main/webnodes"
 
@@ -12,13 +13,28 @@ import (
 func InitHelloWinContent(application fyne.App) *fyne.Container {
 	usernameEntry := widget.NewEntry()
 
+	ch := make(chan game.Game)
+
 	connectToTheGameButton := widget.NewButton("Подключиться к существующей игре", func() {
-		webNode := webnodes.NewWebSnakeNormalNode(usernameEntry.Text)
+		webNode := webnodes.NewWebSnakeNormalNode()
 		webNode.Run()
-		game.ChooseGame(application, usernameEntry.Text)
+
+		go game.ChooseGame(application, ch)
+
+		g := <-ch
+		log.Println("After generation the game")
+		webNode.SetGame(&g)
 	})
+
 	createTheGameButton := widget.NewButton("Создать новую игру", func() {
-		createAndShowSetGameConfigFrame(application, usernameEntry.Text)
+		createAndShowSetGameConfigFrame(application, usernameEntry.Text, ch)
+
+		g := <-ch
+		log.Println("After channel reading", g)
+
+		node := webnodes.NewWebNode(&g)
+		go g.MainLoop()
+		node.RunLikeMaster()
 	})
 
 	hello := widget.NewLabel("Hello, what is your name?")

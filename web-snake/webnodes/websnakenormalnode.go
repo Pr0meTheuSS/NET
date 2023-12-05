@@ -2,6 +2,7 @@ package webnodes
 
 import (
 	"log"
+	"main/game"
 	"main/pubsub"
 	"main/websnake"
 	"net"
@@ -14,25 +15,26 @@ import (
 )
 
 type mcastConn struct {
-	baseconn  net.PacketConn
 	multiconn *ipv4.PacketConn
 	iface     net.Interface
 }
 
-type webSnakeNormalNode struct {
-	username    string
+type WebSnakeNormalNode struct {
 	mcastconn   *mcastConn
 	unicastconn *net.UDPConn
+	game        *game.Game
 }
 
-func NewWebSnakeNormalNode(username string) *webSnakeNormalNode {
+func (w *WebSnakeNormalNode) SetGame(g *game.Game) {
+	w.game = g
+}
+
+func NewWebSnakeNormalNode() *WebSnakeNormalNode {
 	conn, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Local address:", conn.LocalAddr())
 
-	// log.Println("Recv Announcement message")
 	mcastgroup := "224.0.0.1"
 	port := 8888
 	mcastConn, err := createMulticastJoinedConnection(mcastgroup, port, "wlp2s0")
@@ -40,8 +42,7 @@ func NewWebSnakeNormalNode(username string) *webSnakeNormalNode {
 		log.Println("Catch error when create multicast packet connection:", err)
 		os.Exit(1)
 	}
-	node := &webSnakeNormalNode{
-		username:    username,
+	node := &WebSnakeNormalNode{
 		mcastconn:   mcastConn,
 		unicastconn: conn,
 	}
@@ -67,12 +68,12 @@ func NewWebSnakeNormalNode(username string) *webSnakeNormalNode {
 	return node
 }
 
-func (w *webSnakeNormalNode) Run() {
+func (w *WebSnakeNormalNode) Run() {
 	go w.ReceiveMultiAnnouncments()
 	go w.ListenAndServe()
 }
 
-func (w *webSnakeNormalNode) join(msg pubsub.Message) {
+func (w *WebSnakeNormalNode) join(msg pubsub.Message) {
 	log.Println("Start to join into the game ------------------")
 	defer log.Println("------------------ sent join message")
 	announce := msg.Msg.GetAnnouncement()
@@ -83,6 +84,7 @@ func (w *webSnakeNormalNode) join(msg pubsub.Message) {
 	tp := websnake.PlayerType_HUMAN
 	r := websnake.NodeRole_NORMAL
 
+	name := "Playername"
 	message := websnake.GameMessage{
 		MsgSeq:     new(int64),
 		SenderId:   new(int32),
@@ -90,7 +92,7 @@ func (w *webSnakeNormalNode) join(msg pubsub.Message) {
 		Type: &websnake.GameMessage_Join{
 			Join: &websnake.GameMessage_JoinMsg{
 				PlayerType:    &tp,
-				PlayerName:    &w.username,
+				PlayerName:    &name,
 				GameName:      announce.GetGames()[0].GameName,
 				RequestedRole: &r,
 			},
@@ -102,50 +104,12 @@ func (w *webSnakeNormalNode) join(msg pubsub.Message) {
 		log.Println(err)
 		os.Exit(1)
 	}
+
 	w.SendTo(date, *msg.To)
 }
 
-func (mcc *mcastConn) Close() {
-	mcc.baseconn.Close()
-	mcc.multiconn.Close()
-}
-
-func createMulticastJoinedConnection(mcastgroup string, port int, interfaceName string) (*mcastConn, error) {
-	conn, err := net.ListenPacket("udp", mcastgroup+":"+strconv.Itoa(port))
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-
-	group := net.ParseIP(mcastgroup)
-	if group == nil {
-		log.Println("Invalid multicast group address.")
-		return nil, err
-	}
-
-	p := ipv4.NewPacketConn(conn)
-	netIface, err := net.InterfaceByName(interfaceName)
-	log.Println(netIface)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	p.SetMulticastInterface(netIface)
-
-	if err := p.JoinGroup(netIface, &net.UDPAddr{IP: group, Port: port}); err != nil {
-		log.Println(err)
-		return nil, err
-	}
-
-	return &mcastConn{
-		baseconn:  conn,
-		multiconn: p,
-		iface:     *netIface,
-	}, nil
-}
-
 // Run in goroutine.
-func (w *webSnakeNormalNode) ReceiveMultiAnnouncments() {
+func (w *WebSnakeNormalNode) ReceiveMultiAnnouncments() {
 
 	for {
 		buf := make([]byte, 1024)
@@ -208,7 +172,7 @@ func addMasterAddresIntoPlayers(players []*websnake.GamePlayer, srcAddr net.Addr
 	return players
 }
 
-func (w *webSnakeNormalNode) SendTo(data []byte, to net.UDPAddr) {
+func (w *WebSnakeNormalNode) SendTo(data []byte, to net.UDPAddr) {
 	log.Println("Send Unicast message to ", to.String())
 	defer log.Println("---------------------------------------Unicast message sent.")
 
@@ -221,7 +185,7 @@ func (w *webSnakeNormalNode) SendTo(data []byte, to net.UDPAddr) {
 	log.Println("Sent:", n)
 }
 
-func (w *webSnakeNormalNode) ListenAndServe() {
+func (w *WebSnakeNormalNode) ListenAndServe() {
 	log.Println("Master udp conn addr:", w.unicastconn.LocalAddr().String())
 
 	for {
@@ -251,7 +215,9 @@ func (w *webSnakeNormalNode) ListenAndServe() {
 		switch {
 		case message.GetAck() != nil:
 			{
+				log.Println("Catch ack with receiver id:", *message.ReceiverId)
 				w.handleAck(eventMessage)
+				w.game.SetMainPlayer(*message.ReceiverId)
 			}
 		case message.GetPing() != nil:
 			{
@@ -268,20 +234,26 @@ func (w *webSnakeNormalNode) ListenAndServe() {
 	}
 }
 
-func (w *webSnakeNormalNode) handleAck(eventMessage pubsub.Message) {
-	log.Println("Read from udp socket:", eventMessage)
-	pubsub.GetGlobalPubSubService().Publish("ack", eventMessage)
+var wasJoined = false
+
+func (w *WebSnakeNormalNode) handleAck(eventMessage pubsub.Message) {
+	log.Println("Receive ack:", eventMessage)
+	log.Println("Was Joined: ", wasJoined)
+	if !wasJoined {
+		w.game.SetMainPlayer(eventMessage.Msg.GetReceiverId())
+		wasJoined = true
+	} else {
+		pubsub.GetGlobalPubSubService().Publish("ack", eventMessage)
+	}
 }
 
-func (w *webSnakeNormalNode) handleState(eventMessage pubsub.Message) {
-	log.Println("Read from udp socket:", eventMessage)
+func (w *WebSnakeNormalNode) handleState(eventMessage pubsub.Message) {
 	players := eventMessage.Msg.GetState().State.Players.Players
 	addMasterAddresIntoPlayers(players, eventMessage.From)
 	pubsub.GetGlobalPubSubService().Publish("newgamestate", eventMessage)
 }
 
-func (w *webSnakeNormalNode) sendSteer(msg pubsub.Message) {
-	log.Println("Start to send steer $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+func (w *WebSnakeNormalNode) sendSteer(msg pubsub.Message) {
 	defer log.Println("------------------ sent steer message")
 
 	data, err := proto.Marshal(msg.Msg)

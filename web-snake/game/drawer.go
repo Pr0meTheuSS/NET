@@ -47,6 +47,10 @@ func GetGridToDraw(gridSize, winSize Size) []fyne.CanvasObject {
 }
 
 func GetSnakeToDraw(s snake.Snake, food []geometry.Position, winSize, gridSize Size, clr color.Color) []fyne.CanvasObject {
+	if !s.IsAlive {
+		return []fyne.CanvasObject{}
+	}
+
 	cellSize := fyne.NewSize(float32(winSize.Width/gridSize.Width), float32(winSize.Height/gridSize.Height))
 
 	snakeCells := []fyne.CanvasObject{}
@@ -77,7 +81,6 @@ func GetSnakeToDraw(s snake.Snake, food []geometry.Position, winSize, gridSize S
 }
 
 func Draw(g *Game) {
-
 	objsToDraw := []fyne.CanvasObject{}
 	objsToDraw = append(objsToDraw, GetGridToDraw(g.GridSize, g.WinSize)...)
 
@@ -89,7 +92,7 @@ func Draw(g *Game) {
 			A: 255,
 		}
 
-		if g.mainPlayerId == p.Id {
+		if *g.MainPlayerID == p.Id {
 			snakeColor = color.RGBA{
 				R: 0,
 				G: 255,

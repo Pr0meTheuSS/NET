@@ -40,7 +40,7 @@ func CreateGame(app fyne.App, username, gamename string, width, height, foodStat
 		pubsub.GetGlobalPubSubService().Publish("steersend", pubsub.Message{
 			Msg: &websnake.GameMessage{
 				MsgSeq:     new(int64),
-				SenderId:   &thisGame.mainPlayerId,
+				SenderId:   thisGame.MainPlayerID,
 				ReceiverId: new(int32),
 				Type: &websnake.GameMessage_Steer{
 					Steer: &websnake.GameMessage_SteerMsg{

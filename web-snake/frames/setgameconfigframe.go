@@ -12,7 +12,14 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func createAndShowSetGameConfigFrame(app fyne.App, username string) {
+// var thisGame = &game.Game{}
+var thisWebNode = &webnodes.WebSnakeMasterNode{}
+var ch chan game.Game
+
+func createAndShowSetGameConfigFrame(app fyne.App, username string, gameChan chan game.Game) {
+	ch = gameChan
+	// log.Println("Game in config frame", thisGame)
+
 	configWindow := app.NewWindow("Конфигурация новой игры")
 	configWindow.Resize(fyne.NewSize(400, 400))
 	configWindow.CenterOnScreen()
@@ -65,13 +72,8 @@ func InitSetGameConfigWindowContent(app fyne.App, username string) *fyne.Contain
 				log.Fatal(err)
 			}
 
-			newGame := game.CreateGame(app, username, nameEntry.Text, int32(width), int32(height), int32(food), int32(delay))
-			webNode := webnodes.NewWebSnakeMasterNode(newGame)
-			defer webNode.DestroyNode()
-
-			go webNode.SendMultiAnnouncment()
-			go webNode.ListenAndServe()
-			newGame.MainLoop()
+			ch <- *game.CreateGame(app, username, nameEntry.Text, int32(width), int32(height), int32(food), int32(delay))
+			// thisWebNode.Run()
 		},
 	}
 

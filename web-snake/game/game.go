@@ -33,6 +33,7 @@ type Player struct {
 	Score       int32
 	Snake       *snake.Snake
 	LastTimeout time.Time
+	IsZombie    bool
 }
 
 func NewGame(gamename string, win fyne.Window, plrs []Player, winsize Size, gridsize Size, delay int32, staticfood int32, food []geometry.Position) *Game {
@@ -42,16 +43,17 @@ func NewGame(gamename string, win fyne.Window, plrs []Player, winsize Size, grid
 	}
 
 	newGame := &Game{
-		Name:         gamename,
-		Players:      players,
-		WinSize:      winsize,
-		GridSize:     gridsize,
-		Delay:        delay,
-		StaticFood:   staticfood,
-		Food:         food,
-		Window:       win,
-		IsRun:        true,
-		MainPlayerID: new(int32),
+		Name:              gamename,
+		Players:           players,
+		WinSize:           winsize,
+		GridSize:          gridsize,
+		Delay:             delay,
+		StaticFood:        staticfood,
+		Food:              food,
+		Window:            win,
+		IsRun:             true,
+		MainPlayerID:      new(int32),
+		ConnectionChannel: make(chan *websnake.GameAnnouncement),
 	}
 
 	for i := int32(0); i < newGame.StaticFood; i++ {
@@ -78,6 +80,7 @@ func NewGame(gamename string, win fyne.Window, plrs []Player, winsize Size, grid
 		EventChannel: make(chan string),
 		EventHandler: func(message pubsub.Message) {
 			playerId := message.Msg.SenderId
+			log.Println("----------------------------Steer player with id:", *playerId)
 			steer := message.Msg.GetSteer()
 			newGame.steerPlayerSnake(*playerId, netDirToModel[*steer.Direction])
 		},
@@ -85,6 +88,11 @@ func NewGame(gamename string, win fyne.Window, plrs []Player, winsize Size, grid
 	pubsub.GetGlobalPubSubService().Subscribe("steer", subToSteer)
 
 	return newGame
+}
+
+func (g *Game) ConnectToTheGame(v *websnake.GameAnnouncement) {
+	log.Println("send game announce to game channel")
+	g.ConnectionChannel <- v
 }
 
 func (g *Game) steerPlayerSnake(playerId int32, dir snake.Direction) {
@@ -195,16 +203,18 @@ func (g *Game) GameStateToGame(gs *websnake.GameState) Game {
 }
 
 type Game struct {
-	Name         string
-	Players      map[int32]*Player
-	WinSize      Size
-	GridSize     Size
-	Delay        int32
-	StaticFood   int32
-	Food         []geometry.Position
-	Window       fyne.Window
-	IsRun        bool
-	MainPlayerID *int32
+	Name              string
+	Players           map[int32]*Player
+	WinSize           Size
+	GridSize          Size
+	Delay             int32
+	StaticFood        int32
+	Food              []geometry.Position
+	Window            fyne.Window
+	IsRun             bool
+	MainPlayerID      *int32
+	NodeRole          websnake.NodeRole
+	ConnectionChannel chan *websnake.GameAnnouncement
 }
 
 func (g *Game) Run() {
@@ -212,18 +222,25 @@ func (g *Game) Run() {
 }
 
 func (g *Game) SetMainPlayer(id int32) {
-	log.Println("Main player set id", id)
 	*g.MainPlayerID = id
-	log.Println("Main player set id", g.MainPlayerID, &g)
-	log.Printf("%+v", g)
 }
 
 func (g *Game) Close() {
 	g.IsRun = false
 }
 
-func (g *Game) GetMainPlayer() Player {
-	return *g.Players[*g.MainPlayerID]
+func (g *Game) GetMainPlayer() *Player {
+	if len(g.Players) == 1 {
+		for _, p := range g.Players {
+			return p
+		}
+	}
+
+	if player, ok := g.Players[*g.MainPlayerID]; ok {
+		return player
+	}
+
+	return nil
 }
 
 func (g *Game) AddPlayer(username, ipAddress string, port int, role websnake.NodeRole, tp websnake.PlayerType) (*Player, error) {
@@ -268,10 +285,12 @@ func (g *Game) AddMainPlayer(username, ipAddress string, port int, role websnake
 
 	g.Players[newPlayer.Id] = newPlayer
 	*g.MainPlayerID = newPlayer.Id
+	g.NodeRole = role
 	return nil
 }
 
 func HandleUserInput(ke *fyne.KeyEvent, s *snake.Snake) {
+	log.Println("Handle user input")
 	keyToDir := map[fyne.KeyName]snake.Direction{
 		fyne.KeyW: snake.UP,
 		fyne.KeyD: snake.RIGHT,

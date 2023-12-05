@@ -57,7 +57,12 @@ func GetSnakeToDraw(s snake.Snake, food []geometry.Position, winSize, gridSize S
 	for i, cell := range s.Body {
 		cellToDraw := canvas.NewRectangle(clr)
 		if i == 0 {
-			cellToDraw.FillColor = color.Gray{}
+			cellToDraw.FillColor = color.RGBA{
+				R: 0,
+				G: 255,
+				B: 0,
+				A: 255,
+			}
 		}
 
 		cellToDraw.Resize(cellSize)
@@ -99,6 +104,16 @@ func Draw(g *Game) {
 				B: 0,
 				A: 255,
 			}
+		}
+
+		if p.IsZombie {
+			snakeColor = color.RGBA{
+				R: 128,
+				G: 0,
+				B: 128,
+				A: 255,
+			}
+
 		}
 		objsToDraw = append(objsToDraw, GetSnakeToDraw(*p.Snake, g.Food, g.WinSize, g.GridSize, snakeColor)...)
 

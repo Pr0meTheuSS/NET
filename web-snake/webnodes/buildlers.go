@@ -11,7 +11,7 @@ func (w *WebNode) buildAckBytes(receiverId int32) []byte {
 	seq := generateSeq()
 	msg := websnake.GameMessage{
 		MsgSeq:     &seq,
-		SenderId:   w.game.MainPlayerID,
+		SenderId:   &w.game.GetMainPlayer().Id,
 		ReceiverId: &receiverId,
 		Type: &websnake.GameMessage_Ack{
 			Ack: &websnake.GameMessage_AckMsg{},
@@ -27,6 +27,29 @@ func (w *WebNode) buildAckBytes(receiverId int32) []byte {
 }
 
 var globalStateOrder = int32(0)
+
+func (w *WebNode) buildSteerBytes(direction websnake.Direction) []byte {
+	seq := generateSeq()
+	log.Println("In steer builder main player id:", *w.game.MainPlayerID)
+
+	gameMessage := websnake.GameMessage{
+		MsgSeq:     &seq,
+		SenderId:   w.game.MainPlayerID,
+		ReceiverId: new(int32),
+		Type: &websnake.GameMessage_Steer{
+			Steer: &websnake.GameMessage_SteerMsg{
+				Direction: &direction,
+			},
+		},
+	}
+
+	data, err := proto.Marshal(&gameMessage)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return data
+}
 
 func (w *WebNode) buildGameStateBytes(receiverId int32, stateOrder int32) []byte {
 	seq := generateSeq()

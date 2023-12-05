@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"fmt"
+	"log"
 	"main/websnake"
 	"net"
 	"sync"
@@ -43,6 +44,7 @@ func (p *PubSubService) Subscribe(topic string, sub Subscriber) {
 
 // Publish отправляет сообщение в указанную тему
 func (p *PubSubService) Publish(topic string, msg Message) {
+	log.Println("Message publish about:", topic)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

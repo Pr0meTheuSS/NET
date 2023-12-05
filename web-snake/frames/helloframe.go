@@ -16,14 +16,14 @@ func InitHelloWinContent(application fyne.App) *fyne.Container {
 	ch := make(chan game.Game)
 
 	connectToTheGameButton := widget.NewButton("Подключиться к существующей игре", func() {
-		webNode := webnodes.NewWebSnakeNormalNode()
-		webNode.Run()
+		webNode := webnodes.NewWebNode(&game.Game{})
+		webNode.RunLikeNormal()
 
-		go game.ChooseGame(application, ch)
+		go game.ChooseGame(application, ch, usernameEntry.Text)
 
 		g := <-ch
-		log.Println("After generation the game")
 		webNode.SetGame(&g)
+		go webNode.Join()
 	})
 
 	createTheGameButton := widget.NewButton("Создать новую игру", func() {

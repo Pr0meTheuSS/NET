@@ -21,6 +21,74 @@ type WebNode struct {
 	multiconn *mcastConn
 }
 
+var seq = int64(-1)
+
+func generateSeq() int64 {
+	seq++
+	return seq
+}
+
+func (w *WebNode) SetGame(g *game.Game) {
+	w.game = g
+}
+
+func (w *WebNode) Join() {
+	announce := <-w.game.ConnectionChannel
+
+	log.Println("joiner catch command to join and hanlding it")
+	log.Println("Try to connect to the game:", announce)
+
+	tp := websnake.PlayerType_HUMAN
+	r := websnake.NodeRole_NORMAL
+
+	name := w.game.GetMainPlayer().Name
+	gameName := announce.GetGameName()
+
+	seq := generateSeq()
+	message := websnake.GameMessage{
+		MsgSeq: &seq,
+		Type: &websnake.GameMessage_Join{
+			Join: &websnake.GameMessage_JoinMsg{
+				PlayerType:    &tp,
+				PlayerName:    &name,
+				GameName:      &gameName,
+				RequestedRole: &r,
+			},
+		},
+	}
+
+	date, err := proto.Marshal(&message)
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	w.SendTo(date, getMasterAddressFromAnnounce(announce))
+}
+
+func getMasterAddressFromAnnounce(announce *websnake.GameAnnouncement) *net.UDPAddr {
+	players := announce.Players.Players
+	for _, player := range players {
+		if *player.Role == *websnake.NodeRole_MASTER.Enum() {
+			port := int(*player.Port)
+			addr := net.UDPAddr{
+				IP:   net.ParseIP(*player.IpAddress),
+				Port: port,
+				Zone: "",
+			}
+			log.Println("Master addres from announce:", addr)
+			return &addr
+		}
+	}
+
+	return nil
+}
+
+type mcastConn struct {
+	multiconn *ipv4.PacketConn
+	iface     net.Interface
+}
+
 func NewWebNode(game *game.Game) *WebNode {
 	// Create unicast socket.
 	conn, err := net.ListenUDP("udp", nil)
@@ -36,13 +104,27 @@ func NewWebNode(game *game.Game) *WebNode {
 		log.Println("Catch error when create multicast packet connection:", err)
 		os.Exit(1)
 	}
-
-	return &WebNode{
+	node := &WebNode{
 		conn:      conn,
 		game:      game,
 		multiconn: mcastConn,
 	}
 
+	steerSender := pubsub.Subscriber{
+		EventChannel: make(chan string),
+		EventHandler: func(msg pubsub.Message) {
+			node.sendSteer(msg)
+		},
+	}
+
+	pubsub.GetGlobalPubSubService().Subscribe("steersend", steerSender)
+
+	return node
+}
+
+func (w *WebNode) sendSteer(msg pubsub.Message) {
+	log.Println("---------------------------------Steer sent")
+	w.SendTo(w.buildSteerBytes(msg.Msg.GetSteer().GetDirection()), msg.To)
 }
 
 func (mcc *mcastConn) Close() {
@@ -159,6 +241,25 @@ func (w *WebNode) sendGameState() {
 	}
 }
 
+func addMasterAddresIntoPlayers(players []*websnake.GamePlayer, srcAddr net.Addr) []*websnake.GamePlayer {
+	for i, player := range players {
+		if *player.Role == *websnake.NodeRole_MASTER.Enum() {
+			addrPort := strings.Split(srcAddr.String(), ":")
+			players[i].IpAddress = &addrPort[0]
+			port, err := strconv.Atoi(addrPort[1])
+			port32 := int32(port)
+			if err != nil {
+				log.Println(err)
+				os.Exit(1)
+			}
+
+			players[i].Port = &port32
+		}
+	}
+
+	return players
+}
+
 // Run in goroutine.
 func (w *WebNode) ReceiveMultiAnnouncments() {
 	for {
@@ -216,6 +317,8 @@ func (w *WebNode) ListenAndServe() {
 			log.Fatal(err)
 		}
 
+		log.Println("Catch message and prepare to handle it:", message)
+
 		eventMessage := pubsub.Message{
 			Msg:  &message,
 			From: addr,
@@ -224,10 +327,12 @@ func (w *WebNode) ListenAndServe() {
 		switch {
 		case message.GetAck() != nil:
 			{
+				log.Println("Catch ACK-------------------------------")
 				w.handleAck(eventMessage)
 			}
 		case message.GetJoin() != nil:
 			{
+				log.Println("Catch JOIN-------------------------------")
 				w.handleJoin(eventMessage)
 			}
 		case message.GetPing() != nil:
@@ -240,6 +345,7 @@ func (w *WebNode) ListenAndServe() {
 			}
 		case message.GetState() != nil:
 			{
+				log.Println("Catch GAMESTATE-------------------------------")
 				w.handleState(eventMessage)
 			}
 		default:
@@ -250,7 +356,7 @@ func (w *WebNode) ListenAndServe() {
 }
 
 func (w *WebNode) handleAck(message pubsub.Message) {
-	switch w.game.GetMainPlayer().Role {
+	switch w.game.NodeRole {
 	case websnake.NodeRole_MASTER:
 		{
 			w.game.UpdateUserTimeout(message.Msg.GetSenderId(), time.Now())
@@ -260,10 +366,10 @@ func (w *WebNode) handleAck(message pubsub.Message) {
 			// Любой узел, кроме мастера, получает ack в двух случаях:
 			// 1. Подтверждение соединения
 			// 2. Подтверждение любого другого сообщения.
-			if !w.game.IsRun {
-				w.game.SetMainPlayer(*message.Msg.ReceiverId)
-				w.game.Run()
-			}
+			// if !w.game.IsRun {
+			w.game.SetMainPlayer(*message.Msg.ReceiverId)
+			w.game.Run()
+			// }
 		}
 	}
 
@@ -271,13 +377,14 @@ func (w *WebNode) handleAck(message pubsub.Message) {
 }
 
 func (w *WebNode) handleJoin(message pubsub.Message) {
-	switch w.game.GetMainPlayer().Role {
+	switch w.game.NodeRole {
 	case websnake.NodeRole_MASTER:
 		{
 			join := message.Msg.GetJoin()
 			senderIP := message.From.IP
 			senderPort := message.From.Port
-			newPlayer, err := w.game.AddPlayer(join.GetGameName(), senderIP.String(), senderPort, websnake.NodeRole_NORMAL, websnake.PlayerType_HUMAN)
+			log.Println("New player name from join message:", join.GetGameName())
+			newPlayer, err := w.game.AddPlayer(join.GetPlayerName(), senderIP.String(), senderPort, websnake.NodeRole_NORMAL, websnake.PlayerType_HUMAN)
 			if err != nil {
 				// TODO: build and send error
 			}
@@ -295,10 +402,9 @@ func (w *WebNode) handleJoin(message pubsub.Message) {
 }
 
 func (w *WebNode) handleSteer(message pubsub.Message) {
-	switch w.game.GetMainPlayer().Role {
+	switch w.game.NodeRole {
 	case websnake.NodeRole_MASTER:
 		{
-			log.Println("Read from udp socket in master:", message)
 			pubsub.GetGlobalPubSubService().Publish("steer", message)
 			// w.game.UpdateUserTimeout(message.Msg.GetSenderId(), time.Now())
 		}
@@ -311,11 +417,14 @@ func (w *WebNode) handleSteer(message pubsub.Message) {
 }
 
 func (w *WebNode) handleState(message pubsub.Message) {
-	switch w.game.GetMainPlayer().Role {
+	log.Println("Main player id", *w.game.MainPlayerID)
+	log.Println(w.game.NodeRole)
+
+	switch w.game.NodeRole {
 	case websnake.NodeRole_MASTER:
 		{
 		}
-	default:
+	case websnake.NodeRole_NORMAL:
 		{
 			log.Println("Read from udp socket:", message)
 			players := message.Msg.GetState().State.Players.Players
@@ -342,7 +451,7 @@ func (w *WebNode) SendMultiAnnouncment() {
 	}
 
 	for {
-		announce := createAnnounce(*w.game)
+		announce := w.createAnnounce()
 		seq := generateSeq()
 		msg := websnake.GameMessage{
 			MsgSeq:     &seq,
@@ -362,6 +471,28 @@ func (w *WebNode) SendMultiAnnouncment() {
 		updTimer := time.NewTimer(time.Second)
 		<-updTimer.C
 		w.SendTo(data, to)
+	}
+}
+
+func (w *WebNode) createAnnounce() websnake.GameAnnouncement {
+	netPlayers := []*websnake.GamePlayer{}
+	for _, p := range w.game.Players {
+		netPlayers = append(netPlayers, playerToNet(*p))
+	}
+
+	canJoinBool := true
+	return websnake.GameAnnouncement{
+		Players: &websnake.GamePlayers{
+			Players: netPlayers,
+		},
+		Config: &websnake.GameConfig{
+			Width:        &w.game.GridSize.Width,
+			Height:       &w.game.GridSize.Height,
+			FoodStatic:   &w.game.StaticFood,
+			StateDelayMs: &w.game.Delay,
+		},
+		CanJoin:  &canJoinBool,
+		GameName: &w.game.Name,
 	}
 }
 

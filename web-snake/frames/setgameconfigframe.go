@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log"
 	"main/game"
-	"main/webnodes"
+	"main/websnake"
 	"strconv"
 
 	"fyne.io/fyne/v2"
@@ -13,7 +13,6 @@ import (
 )
 
 // var thisGame = &game.Game{}
-var thisWebNode = &webnodes.WebSnakeMasterNode{}
 var ch chan game.Game
 
 func createAndShowSetGameConfigFrame(app fyne.App, username string, gameChan chan game.Game) {
@@ -72,7 +71,7 @@ func InitSetGameConfigWindowContent(app fyne.App, username string) *fyne.Contain
 				log.Fatal(err)
 			}
 
-			ch <- *game.CreateGame(app, username, nameEntry.Text, int32(width), int32(height), int32(food), int32(delay))
+			ch <- *game.CreateGame(app, username, nameEntry.Text, int32(width), int32(height), int32(food), int32(delay), websnake.NodeRole_MASTER)
 			// thisWebNode.Run()
 		},
 	}

@@ -11,14 +11,14 @@ import (
 	"fyne.io/fyne/v2"
 )
 
-func CreateGame(app fyne.App, username, gamename string, width, height, foodStatic, delay int32) *Game {
+func CreateGame(app fyne.App, username, gamename string, width, height, foodStatic, delay int32, role websnake.NodeRole) *Game {
 	w := app.NewWindow("Snake")
 	w.Resize(fyne.NewSize(800, 800))
 	w.SetFixedSize(true)
 	w.CenterOnScreen()
 
 	thisGame := NewGame(gamename, w, []Player{}, Size{600, 600}, Size{Width: width, Height: height}, delay, foodStatic, []geometry.Position{})
-	thisGame.AddMainPlayer(username, "", 0, websnake.NodeRole_MASTER, websnake.PlayerType_HUMAN)
+	thisGame.AddMainPlayer(username, "", 0, role, websnake.PlayerType_HUMAN)
 
 	w.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		HandleUserInput(k, thisGame.GetMainPlayer().Snake)
@@ -26,7 +26,6 @@ func CreateGame(app fyne.App, username, gamename string, width, height, foodStat
 		to := net.UDPAddr{}
 		for _, p := range thisGame.Players {
 			if *p.Role.Enum() == websnake.NodeRole_MASTER {
-				log.Println("FIND MASTER NODE IN PLAYERS")
 				to = net.UDPAddr{
 					IP:   net.ParseIP(p.IpAddress),
 					Port: int(p.Port),
@@ -36,22 +35,24 @@ func CreateGame(app fyne.App, username, gamename string, width, height, foodStat
 			}
 		}
 
-		newDir := DirToNetDir[thisGame.GetMainPlayer().Snake.Dir]
-		pubsub.GetGlobalPubSubService().Publish("steersend", pubsub.Message{
-			Msg: &websnake.GameMessage{
-				MsgSeq:     new(int64),
-				SenderId:   thisGame.MainPlayerID,
-				ReceiverId: new(int32),
-				Type: &websnake.GameMessage_Steer{
-					Steer: &websnake.GameMessage_SteerMsg{
-						Direction: &newDir,
+		if role != websnake.NodeRole_MASTER {
+			newDir := DirToNetDir[thisGame.GetMainPlayer().Snake.Dir]
+			log.Println("New direction:", newDir)
+			pubsub.GetGlobalPubSubService().Publish("steersend", pubsub.Message{
+				Msg: &websnake.GameMessage{
+					MsgSeq:     new(int64),
+					SenderId:   thisGame.MainPlayerID,
+					ReceiverId: new(int32),
+					Type: &websnake.GameMessage_Steer{
+						Steer: &websnake.GameMessage_SteerMsg{
+							Direction: &newDir,
+						},
 					},
 				},
-			},
-			From: &net.UDPAddr{},
-			To:   &to,
-		})
-
+				From: &net.UDPAddr{},
+				To:   &to,
+			})
+		}
 	})
 	w.SetOnClosed(func() { thisGame.Close() })
 

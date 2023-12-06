@@ -58,8 +58,8 @@ func GetSnakeToDraw(s snake.Snake, food []geometry.Position, winSize, gridSize S
 		cellToDraw := canvas.NewRectangle(clr)
 		if i == 0 {
 			cellToDraw.FillColor = color.RGBA{
-				R: 0,
-				G: 255,
+				R: 128,
+				G: 128,
 				B: 0,
 				A: 255,
 			}
@@ -106,15 +106,16 @@ func Draw(g *Game) {
 			}
 		}
 
-		if p.IsZombie {
+		if p.Snake.IsZombie {
 			snakeColor = color.RGBA{
-				R: 128,
+				R: 0,
 				G: 0,
 				B: 128,
 				A: 255,
 			}
 
 		}
+
 		objsToDraw = append(objsToDraw, GetSnakeToDraw(*p.Snake, g.Food, g.WinSize, g.GridSize, snakeColor)...)
 
 		scoreLabel := widget.NewLabel("Score for " + strconv.Itoa(int(p.Id)) + " " + p.Name + ":" + fmt.Sprint(p.Score))

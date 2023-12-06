@@ -13,21 +13,19 @@ import (
 )
 
 // var thisGame = &game.Game{}
-var ch chan game.Game
 
-func createAndShowSetGameConfigFrame(app fyne.App, username string, gameChan chan game.Game) {
-	ch = gameChan
+func createAndShowSetGameConfigFrame(app fyne.App, username string, gameChan chan *game.Game) {
 	// log.Println("Game in config frame", thisGame)
 
 	configWindow := app.NewWindow("Конфигурация новой игры")
 	configWindow.Resize(fyne.NewSize(400, 400))
 	configWindow.CenterOnScreen()
-	configWindow.SetContent(InitSetGameConfigWindowContent(app, username))
+	configWindow.SetContent(InitSetGameConfigWindowContent(app, username, gameChan))
 
 	configWindow.Show()
 }
 
-func InitSetGameConfigWindowContent(app fyne.App, username string) *fyne.Container {
+func InitSetGameConfigWindowContent(app fyne.App, username string, ch chan *game.Game) *fyne.Container {
 	// // Fields for input
 	widthEntry := widget.NewEntry()
 	widthEntry.Text = "20"
@@ -71,7 +69,7 @@ func InitSetGameConfigWindowContent(app fyne.App, username string) *fyne.Contain
 				log.Fatal(err)
 			}
 
-			ch <- *game.CreateGame(app, username, nameEntry.Text, int32(width), int32(height), int32(food), int32(delay), websnake.NodeRole_MASTER)
+			ch <- game.CreateGame(app, username, nameEntry.Text, int32(width), int32(height), int32(food), int32(delay), websnake.NodeRole_MASTER)
 			// thisWebNode.Run()
 		},
 	}

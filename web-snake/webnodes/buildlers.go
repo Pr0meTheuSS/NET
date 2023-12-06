@@ -7,10 +7,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (w *WebNode) buildAckBytes(receiverId int32) []byte {
-	seq := generateSeq()
+func (w *WebNode) buildAckBytes(senderSeqId int64, receiverId int32) []byte {
+	log.Println("Send Ack---------------------------------", senderSeqId, receiverId)
 	msg := websnake.GameMessage{
-		MsgSeq:     &seq,
+		MsgSeq:     &senderSeqId,
 		SenderId:   &w.game.GetMainPlayer().Id,
 		ReceiverId: &receiverId,
 		Type: &websnake.GameMessage_Ack{
@@ -19,6 +19,65 @@ func (w *WebNode) buildAckBytes(receiverId int32) []byte {
 	}
 
 	data, err := proto.Marshal(&msg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return data
+}
+
+func (w *WebNode) buildAnnounceBytes(announce websnake.GameAnnouncement) []byte {
+	seq := generateSeq()
+	msg := websnake.GameMessage{
+		MsgSeq:     &seq,
+		SenderId:   w.game.MainPlayerID,
+		ReceiverId: new(int32),
+		Type: &websnake.GameMessage_Announcement{
+			Announcement: &websnake.GameMessage_AnnouncementMsg{
+				Games: []*websnake.GameAnnouncement{&announce},
+			},
+		},
+	}
+	data, err := proto.Marshal(&msg)
+	if nil != err {
+		log.Fatal(err)
+	}
+
+	return data
+}
+
+func (w *WebNode) buildJoinBytes(username string, gamename string, playerType websnake.PlayerType, playerRole websnake.NodeRole) []byte {
+	seq := generateSeq()
+	message := websnake.GameMessage{
+		MsgSeq: &seq,
+		Type: &websnake.GameMessage_Join{
+			Join: &websnake.GameMessage_JoinMsg{
+				PlayerType:    &playerType,
+				PlayerName:    &username,
+				GameName:      &gamename,
+				RequestedRole: &playerRole,
+			},
+		},
+	}
+
+	data, err := proto.Marshal(&message)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return data
+}
+
+func (w *WebNode) buildPingBytes() []byte {
+	seq := generateSeq()
+	gameMessage := websnake.GameMessage{
+		MsgSeq:     &seq,
+		SenderId:   w.game.MainPlayerID,
+		ReceiverId: new(int32),
+		Type:       &websnake.GameMessage_Ping{Ping: &websnake.GameMessage_PingMsg{}},
+	}
+
+	data, err := proto.Marshal(&gameMessage)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -68,6 +127,7 @@ func (w *WebNode) buildGameStateBytes(receiverId int32, stateOrder int32) []byte
 			},
 		},
 	}
+	log.Println("players in gamestate message:", msg.GetState().State.GetPlayers())
 	data, err := proto.Marshal(&msg)
 	if err != nil {
 		log.Fatal(err)

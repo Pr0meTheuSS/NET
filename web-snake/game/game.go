@@ -33,7 +33,6 @@ type Player struct {
 	Score       int32
 	Snake       *snake.Snake
 	LastTimeout time.Time
-	IsZombie    bool
 }
 
 func NewGame(gamename string, win fyne.Window, plrs []Player, winsize Size, gridsize Size, delay int32, staticfood int32, food []geometry.Position) *Game {
@@ -60,33 +59,6 @@ func NewGame(gamename string, win fyne.Window, plrs []Player, winsize Size, grid
 		newGame.AddFood()
 	}
 
-	subToJoins := pubsub.Subscriber{
-		EventChannel: make(chan string),
-		EventHandler: func(message pubsub.Message) {
-			newGame.handleJoin(message)
-		},
-	}
-	pubsub.GetGlobalPubSubService().Subscribe("join", subToJoins)
-
-	subToNewState := pubsub.Subscriber{
-		EventChannel: make(chan string),
-		EventHandler: func(message pubsub.Message) {
-			newGame.updateGameState(message)
-		},
-	}
-	pubsub.GetGlobalPubSubService().Subscribe("newgamestate", subToNewState)
-
-	subToSteer := pubsub.Subscriber{
-		EventChannel: make(chan string),
-		EventHandler: func(message pubsub.Message) {
-			playerId := message.Msg.SenderId
-			log.Println("----------------------------Steer player with id:", *playerId)
-			steer := message.Msg.GetSteer()
-			newGame.steerPlayerSnake(*playerId, netDirToModel[*steer.Direction])
-		},
-	}
-	pubsub.GetGlobalPubSubService().Subscribe("steer", subToSteer)
-
 	return newGame
 }
 
@@ -95,7 +67,7 @@ func (g *Game) ConnectToTheGame(v *websnake.GameAnnouncement) {
 	g.ConnectionChannel <- v
 }
 
-func (g *Game) steerPlayerSnake(playerId int32, dir snake.Direction) {
+func (g *Game) SteerPlayerSnake(playerId int32, dir snake.Direction) {
 	if player, ok := g.Players[playerId]; ok {
 		player.Snake.SetDirection(dir)
 	}
@@ -107,21 +79,10 @@ func (g *Game) UpdateUserTimeout(userId int32, lastTime time.Time) {
 	}
 }
 
-func (g *Game) updateGameState(message pubsub.Message) {
-	log.Println("Update game by message ------------------------")
-	log.Println(&g)
-	defer log.Println("----------------------Update is over")
-
-	log.Printf("%+v\n", g)
+func (g *Game) UpdateGameState(message pubsub.Message) {
 	updatedGame := g.GameStateToGame(message.Msg.GetState().GetState())
 	g.Players = updatedGame.Players
 	g.Food = updatedGame.Food
-	// g.MainPlayerID = 1
-	log.Println(g)
-	for k, v := range g.Players {
-		log.Println(k, v)
-	}
-	log.Println(g.Food)
 	Draw(g)
 }
 
@@ -137,7 +98,7 @@ func GamePlayerToPlayer(gamePlayer *websnake.GamePlayer) *Player {
 	}
 }
 
-var netDirToModel = map[websnake.Direction]snake.Direction{
+var NetDirToModel = map[websnake.Direction]snake.Direction{
 	websnake.Direction_DOWN:  snake.DOWN,
 	websnake.Direction_UP:    snake.UP,
 	websnake.Direction_LEFT:  snake.LEFT,
@@ -147,6 +108,14 @@ var netDirToModel = map[websnake.Direction]snake.Direction{
 // GameState_Snake to Snake
 func (g *Game) GameStateSnakeToSnake(gsSnake *websnake.GameState_Snake) *snake.Snake {
 	body := []geometry.Position{}
+	if len(gsSnake.Points) == 0 {
+		return &snake.Snake{
+			Body:     body,
+			Dir:      NetDirToModel[*gsSnake.HeadDirection],
+			IsZombie: gsSnake.GetState() == websnake.GameState_Snake_ZOMBIE,
+			IsAlive:  true,
+		}
+	}
 
 	head := geometry.Position{
 		X: gsSnake.Points[0].GetX(),
@@ -163,16 +132,14 @@ func (g *Game) GameStateSnakeToSnake(gsSnake *websnake.GameState_Snake) *snake.S
 		})
 	}
 
-	snake := &snake.Snake{
-		Body:    body,
-		Dir:     netDirToModel[*gsSnake.HeadDirection],
-		IsAlive: gsSnake.GetState() == websnake.GameState_Snake_ALIVE,
+	return &snake.Snake{
+		Body:     body,
+		Dir:      NetDirToModel[*gsSnake.HeadDirection],
+		IsZombie: gsSnake.GetState() == websnake.GameState_Snake_ZOMBIE,
+		IsAlive:  true,
 	}
-	log.Println(snake.Body)
-	return snake
 }
 
-// GameState to Game
 func (g *Game) GameStateToGame(gs *websnake.GameState) Game {
 	gamePlayers := gs.Players.Players
 	players := map[int32]*Player{}
@@ -213,7 +180,6 @@ type Game struct {
 	Window            fyne.Window
 	IsRun             bool
 	MainPlayerID      *int32
-	NodeRole          websnake.NodeRole
 	ConnectionChannel chan *websnake.GameAnnouncement
 }
 
@@ -250,14 +216,15 @@ func (g *Game) AddPlayer(username, ipAddress string, port int, role websnake.Nod
 	}
 
 	newPlayer := &Player{
-		Name:      username,
-		Id:        int32(generatePlayerId()),
-		IpAddress: ipAddress,
-		Port:      int32(port),
-		Role:      role,
-		Type:      tp,
-		Score:     0,
-		Snake:     newSnake,
+		Name:        username,
+		Id:          int32(generatePlayerId()),
+		IpAddress:   ipAddress,
+		Port:        int32(port),
+		Role:        role,
+		Type:        tp,
+		Score:       0,
+		Snake:       newSnake,
+		LastTimeout: time.Now(),
 	}
 
 	g.Players[newPlayer.Id] = newPlayer
@@ -273,19 +240,19 @@ func (g *Game) AddMainPlayer(username, ipAddress string, port int, role websnake
 	}
 
 	newPlayer := &Player{
-		Name:      username,
-		Id:        int32(generatePlayerId()),
-		IpAddress: ipAddress,
-		Port:      int32(port),
-		Role:      role,
-		Type:      tp,
-		Score:     0,
-		Snake:     newSnake,
+		Name:        username,
+		Id:          int32(generatePlayerId()),
+		IpAddress:   ipAddress,
+		Port:        int32(port),
+		Role:        role,
+		Type:        tp,
+		Score:       0,
+		Snake:       newSnake,
+		LastTimeout: time.Now(),
 	}
 
 	g.Players[newPlayer.Id] = newPlayer
 	*g.MainPlayerID = newPlayer.Id
-	g.NodeRole = role
 	return nil
 }
 
@@ -435,7 +402,13 @@ func (g Game) getAlivePlayers() []*Player {
 }
 
 func (g *Game) MainLoop() {
-	for g.Players[0].Snake.IsSnakeAlive() && g.IsRun {
+	for len(g.getAlivePlayers()) > 0 && g.IsRun {
+		log.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+		for _, p := range g.Players {
+			log.Println(*p, "Timeout:", time.Since(p.LastTimeout).Milliseconds())
+		}
+		log.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
 		<-time.NewTimer(time.Duration(g.Delay) * time.Millisecond).C
 		log.Println(g.Players)
 		for _, p := range g.Players {
@@ -443,7 +416,12 @@ func (g *Game) MainLoop() {
 			currentSnake.Move()
 
 			// Голова пересеклась с едой
-			if catchedFoodPosition := geometry.Find(g.Food, currentSnake.Head()); catchedFoodPosition != -1 {
+			snakeHead := currentSnake.Head()
+			if snakeHead == nil {
+				continue
+			}
+
+			if catchedFoodPosition := geometry.Find(g.Food, *snakeHead); catchedFoodPosition != -1 {
 				p.Score++
 				g.Food = append(g.Food[0:catchedFoodPosition], g.Food[catchedFoodPosition+1:]...)
 				g.AddFood()
@@ -457,11 +435,16 @@ func (g *Game) MainLoop() {
 			for _, player := range alivePlayers {
 				if p != player {
 					// Если в теле другой змеи найдётся голова текущей змеи
-					if geometry.Find(player.Snake.Body, p.Snake.Head()) != -1 {
+					snakeHead := p.Snake.Head()
+					if snakeHead == nil {
+						continue
+					}
+
+					if geometry.Find(player.Snake.Body, *snakeHead) != -1 {
 						p.Snake.IsAlive = false
 						// Накидываем убийце +1
 						player.Score++
-						g.castBodyToFood(*p.Snake)
+						g.castBodyToFood(p.Snake)
 					}
 				}
 			}
@@ -474,12 +457,14 @@ func (g *Game) MainLoop() {
 	}
 }
 
-func (g *Game) castBodyToFood(s snake.Snake) {
+func (g *Game) castBodyToFood(s *snake.Snake) {
 	for _, cell := range s.Body[1:] {
 		if random(2)%2 == 0 {
 			g.Food = append(g.Food, cell)
 		}
 	}
+
+	s.Body = []geometry.Position{}
 }
 
 func generateFood(width, height int32) geometry.Position {

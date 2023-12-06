@@ -1,7 +1,6 @@
 package webnodes
 
 import (
-	"log"
 	"main/game"
 	"main/snake"
 	"main/websnake"
@@ -16,6 +15,22 @@ var DirToNetDir = map[snake.Direction]websnake.Direction{
 
 func playerToNetSnake(p game.Player) *websnake.GameState_Snake {
 	netCoords := []*websnake.GameState_Coord{}
+	webDir := DirToNetDir[p.Snake.Dir]
+
+	snakeState := websnake.GameState_Snake_ALIVE
+	if p.Snake.IsZombie {
+		snakeState = websnake.GameState_Snake_ZOMBIE
+	}
+
+	if len(p.Snake.Body) == 0 {
+		return &websnake.GameState_Snake{
+			PlayerId:      &p.Id,
+			Points:        netCoords,
+			State:         &snakeState,
+			HeadDirection: &webDir,
+		}
+	}
+
 	netCoords = append(netCoords, &websnake.GameState_Coord{
 		X: &p.Snake.Body[0].X,
 		Y: &p.Snake.Body[0].Y,
@@ -30,14 +45,10 @@ func playerToNetSnake(p game.Player) *websnake.GameState_Snake {
 		})
 	}
 
-	webDir := DirToNetDir[p.Snake.Dir]
-
-	log.Printf("Snake coords: %+v", netCoords)
 	return &websnake.GameState_Snake{
-		PlayerId: &p.Id,
-		Points:   netCoords,
-		// TODO: сейчас змея всегда живая, режим зомби не реализован
-		State:         websnake.GameState_Snake_ALIVE.Enum(),
+		PlayerId:      &p.Id,
+		Points:        netCoords,
+		State:         &snakeState,
 		HeadDirection: &webDir,
 	}
 

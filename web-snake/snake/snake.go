@@ -23,6 +23,7 @@ type Snake struct {
 	Dir      Direction
 	IsAlive  bool
 	score    int
+	IsZombie bool
 }
 
 func getRandomDirection() int {
@@ -59,10 +60,11 @@ func NewSnake(boardWidth, boardHeight, snakePosX, snakePosY int32) *Snake {
 
 	snakeGame := &Snake{
 		Body:     []geometry.Position{head, tail},
+		prevTail: tail,
 		Dir:      Direction(dir),
 		IsAlive:  true,
-		prevTail: tail,
 		score:    0,
+		IsZombie: false,
 	}
 
 	return snakeGame
@@ -76,8 +78,12 @@ func (s *Snake) IsSnakeAlive() bool {
 	return s.IsAlive
 }
 
-func (s *Snake) Head() geometry.Position {
-	return s.Body[0]
+func (s *Snake) Head() *geometry.Position {
+	if len(s.Body) == 0 {
+		return nil
+	}
+
+	return &s.Body[0]
 }
 
 func (s *Snake) Move() {

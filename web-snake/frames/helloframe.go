@@ -13,17 +13,18 @@ import (
 func InitHelloWinContent(application fyne.App) *fyne.Container {
 	usernameEntry := widget.NewEntry()
 
-	ch := make(chan game.Game)
+	ch := make(chan *game.Game)
 
 	connectToTheGameButton := widget.NewButton("Подключиться к существующей игре", func() {
-		webNode := webnodes.NewWebNode(&game.Game{})
+		webNode := webnodes.NewEmptyWebNode()
 		webNode.RunLikeNormal()
 
 		go game.ChooseGame(application, ch, usernameEntry.Text)
 
 		g := <-ch
-		webNode.SetGame(&g)
+		webNode.SetGame(g)
 		go webNode.Join()
+		go webNode.CleanupPlayers()
 	})
 
 	createTheGameButton := widget.NewButton("Создать новую игру", func() {
@@ -32,7 +33,7 @@ func InitHelloWinContent(application fyne.App) *fyne.Container {
 		g := <-ch
 		log.Println("After channel reading", g)
 
-		node := webnodes.NewWebNode(&g)
+		node := webnodes.NewWebNode(g)
 		go g.MainLoop()
 		node.RunLikeMaster()
 	})

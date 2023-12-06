@@ -15,7 +15,7 @@ import (
 var gameslist = map[string]*websnake.GameAnnouncement{}
 var mtx sync.RWMutex
 
-func ChooseGame(app fyne.App, ch chan Game, username string) {
+func ChooseGame(app fyne.App, ch chan *Game, username string) {
 	chooseGame := app.NewWindow("Choose Game")
 	chooseGame.Resize(fyne.NewSize(800, 800))
 	chooseGame.SetFixedSize(true)
@@ -51,11 +51,11 @@ func UpdateGamesList(game *websnake.GameAnnouncement) {
 	mtx.Unlock()
 }
 
-func UpdateChooseGameWindow(application fyne.App, win fyne.Window, ch chan Game, username string) {
+func UpdateChooseGameWindow(application fyne.App, win fyne.Window, ch chan *Game, username string) {
 	win.SetContent(container.NewVBox(getButtonsToConenctWithGame(application, ch, username)...))
 }
 
-func getButtonsToConenctWithGame(application fyne.App, ch chan Game, username string) []fyne.CanvasObject {
+func getButtonsToConenctWithGame(application fyne.App, ch chan *Game, username string) []fyne.CanvasObject {
 	btns := []fyne.CanvasObject{}
 	mtx.RLock()
 	for k, v := range gameslist {
@@ -64,7 +64,7 @@ func getButtonsToConenctWithGame(application fyne.App, ch chan Game, username st
 
 			game := CreateGame(application, username, *v.GameName, *v.Config.Width, *v.Config.Height, *v.Config.FoodStatic, *v.Config.StateDelayMs, websnake.NodeRole_NORMAL)
 			go game.ConnectToTheGame(v)
-			ch <- *game
+			ch <- game
 		}))
 	}
 	mtx.RUnlock()

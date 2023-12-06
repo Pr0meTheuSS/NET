@@ -1,12 +1,10 @@
 package game
 
 import (
-	"log"
 	"main/geometry"
 	"main/pubsub"
 	"main/snake"
 	"main/websnake"
-	"net"
 
 	"fyne.io/fyne/v2"
 )
@@ -23,21 +21,8 @@ func CreateGame(app fyne.App, username, gamename string, width, height, foodStat
 	w.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		HandleUserInput(k, thisGame.GetMainPlayer().Snake)
 
-		to := net.UDPAddr{}
-		for _, p := range thisGame.Players {
-			if *p.Role.Enum() == websnake.NodeRole_MASTER {
-				to = net.UDPAddr{
-					IP:   net.ParseIP(p.IpAddress),
-					Port: int(p.Port),
-					Zone: "",
-				}
-				log.Println(to)
-			}
-		}
-
 		if role != websnake.NodeRole_MASTER {
 			newDir := DirToNetDir[thisGame.GetMainPlayer().Snake.Dir]
-			log.Println("New direction:", newDir)
 			pubsub.GetGlobalPubSubService().Publish("steersend", pubsub.Message{
 				Msg: &websnake.GameMessage{
 					MsgSeq:     new(int64),
@@ -49,8 +34,6 @@ func CreateGame(app fyne.App, username, gamename string, width, height, foodStat
 						},
 					},
 				},
-				From: &net.UDPAddr{},
-				To:   &to,
 			})
 		}
 	})

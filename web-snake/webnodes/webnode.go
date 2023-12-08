@@ -260,6 +260,7 @@ func (w *WebNode) mapModelFoodToNetFood() []*websnake.GameState_Coord {
 
 func (w *WebNode) sendGameStates() {
 	for {
+		log.Println("send game state -----------------------------------")
 		<-time.NewTimer(time.Duration(w.game.Delay) * time.Millisecond).C
 		w.sendGameState()
 	}
@@ -365,9 +366,12 @@ func (w *WebNode) CleanupPlayers() {
 				for _, player := range w.game.Players {
 					if player.Role != websnake.NodeRole_MASTER {
 						// теряем бойца.
-						if IsPlayerTimeIsOut(player, w.game.Delay*2) {
+						if IsPlayerTimeIsOut(player, w.game.Delay*4) {
 							if player.Role == websnake.NodeRole_DEPUTY {
-								// w.SetNewDeputy()
+								// удаляем депути
+								delete(w.game.Players, player.Id)
+								// Ставим нового
+								w.setDeputy()
 							}
 
 							player.Snake.IsZombie = true
@@ -379,22 +383,25 @@ func (w *WebNode) CleanupPlayers() {
 		case websnake.NodeRole_NORMAL:
 			{
 				master := FindPlayerWithRole(w.game, websnake.NodeRole_MASTER)
-				if master != nil && IsPlayerTimeIsOut(master, w.game.Delay*2) {
+				if master != nil && IsPlayerTimeIsOut(master, w.game.Delay*4) {
 					// удаляем мастера.
 					delete(w.game.Players, master.Id)
 				}
 			}
 		case websnake.NodeRole_DEPUTY:
 			{
-				// master := FindPlayerWithRole(w.game, websnake.NodeRole_MASTER)
-				// if master != nil && IsPlayerTimeIsOut(master, w.game.Delay*2) {
-				// 	// удаляем мастера.
-				// 	delete(w.game.Players, master.Id)
-				// 	// TODO: send change role
-
-				// 	// start game like master
-				// 	go w.game.MainLoop()
-				// }
+				master := FindPlayerWithRole(w.game, websnake.NodeRole_MASTER)
+				if master != nil && IsPlayerTimeIsOut(master, w.game.Delay*4) {
+					log.Println("delete master by time out")
+					// удаляем мастера.
+					master.Snake.IsZombie = true
+					// delete(w.game.Players, master.Id)
+					w.game.Players[*w.game.MainPlayerID].Role = websnake.NodeRole_MASTER
+					// start game like master
+					go w.game.MainLoop()
+					go w.SendMultiAnnouncment()
+					go w.sendGameStates()
+				}
 			}
 		}
 	}
@@ -461,10 +468,10 @@ func (w *WebNode) ListenAndServe() {
 var wasJoined = false
 
 func (w *WebNode) handleAck(message pubsub.Message) {
+	w.game.UpdateUserTimeout(message.Msg.GetSenderId(), time.Now())
 	switch w.game.GetMainPlayer().Role {
 	case websnake.NodeRole_MASTER:
 		{
-			w.game.UpdateUserTimeout(message.Msg.GetSenderId(), time.Now())
 		}
 	default:
 		{
@@ -498,6 +505,22 @@ func (w *WebNode) handlePing(message pubsub.Message) {
 	}
 
 	// w.messageQueue.Dequeue(message.Msg.GetMsgSeq())
+}
+
+func (w *WebNode) setDeputy() *game.Player {
+	currentDeputy := FindPlayerWithRole(w.game, websnake.NodeRole_DEPUTY)
+	if currentDeputy != nil {
+		return currentDeputy
+	}
+
+	for _, player := range w.game.Players {
+		if player.Role == websnake.NodeRole_NORMAL {
+			player.Role = websnake.NodeRole_DEPUTY
+			return player
+		}
+	}
+
+	return nil
 }
 
 func (w *WebNode) handleJoin(message pubsub.Message) {
@@ -535,15 +558,16 @@ func (w *WebNode) handleJoin(message pubsub.Message) {
 }
 
 func (w *WebNode) handleSteer(message pubsub.Message) {
+	w.game.UpdateUserTimeout(message.Msg.GetSenderId(), time.Now())
 	switch w.game.GetMainPlayer().Role {
 	case websnake.NodeRole_MASTER:
 		{
 			pubsub.GetGlobalPubSubService().Publish("steer", message)
-			w.game.UpdateUserTimeout(message.Msg.GetSenderId(), time.Now())
 			playerId := message.Msg.SenderId
 			log.Println("----------------------------Steer player with id:", *playerId)
 			steer := message.Msg.GetSteer()
 			w.game.SteerPlayerSnake(*playerId, game.NetDirToModel[steer.GetDirection()])
+
 			// send ack
 			w.SendTo(w.buildAckBytes(message.Msg.GetMsgSeq(), message.Msg.GetSenderId()), message.From)
 		}
@@ -556,6 +580,7 @@ func (w *WebNode) handleSteer(message pubsub.Message) {
 }
 
 func (w *WebNode) handleState(message pubsub.Message) {
+	w.game.UpdateUserTimeout(message.Msg.GetSenderId(), time.Now())
 	switch w.game.GetMainPlayer().Role {
 	case websnake.NodeRole_MASTER:
 		{

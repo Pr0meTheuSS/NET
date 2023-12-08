@@ -108,6 +108,7 @@ func (s *Snake) Move() {
 	// Если произошло столкновение с собой.
 	if geometry.Find(s.Body[1:], head) != -1 {
 		s.IsAlive = false
+		s.Body = []geometry.Position{}
 		return
 	}
 

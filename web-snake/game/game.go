@@ -215,9 +215,17 @@ func (g *Game) AddPlayer(username, ipAddress string, port int, role websnake.Nod
 		return nil, err
 	}
 
+	newId := generatePlayerId()
+	for p, ok := g.Players[newId]; ok && p != nil; newId = generatePlayerId() {
+		p, ok = g.Players[newId]
+		log.Println(p, ok)
+		log.Println(len(g.Players))
+		log.Println(newId)
+	}
+
 	newPlayer := &Player{
 		Name:        username,
-		Id:          int32(generatePlayerId()),
+		Id:          newId,
 		IpAddress:   ipAddress,
 		Port:        int32(port),
 		Role:        role,
@@ -339,10 +347,10 @@ func (g *Game) AddFood() {
 	g.Food = append(g.Food, new)
 }
 
-var globalPlayerCounter = -1
+var globalPlayerCounter = int32(-1)
 
-func generatePlayerId() int {
-	log.Println("Generate new player id")
+func generatePlayerId() int32 {
+	log.Println("Generate new player id", globalPlayerCounter)
 	globalPlayerCounter++
 	return globalPlayerCounter
 }
@@ -402,7 +410,7 @@ func (g Game) getAlivePlayers() []*Player {
 }
 
 func (g *Game) MainLoop() {
-	for len(g.getAlivePlayers()) > 0 && g.IsRun {
+	for g.IsRun {
 		log.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 		for _, p := range g.Players {
 			log.Println(*p, "Timeout:", time.Since(p.LastTimeout).Milliseconds())

@@ -134,13 +134,21 @@ func (g *Game) GameStateSnakeToSnake(gsSnake *websnake.GameState_Snake) *snake.S
 
 	return &snake.Snake{
 		Body:     body,
+		PrevTail: body[len(body)-1],
 		Dir:      NetDirToModel[*gsSnake.HeadDirection],
-		IsZombie: gsSnake.GetState() == websnake.GameState_Snake_ZOMBIE,
 		IsAlive:  true,
+		IsZombie: gsSnake.GetState() == websnake.GameState_Snake_ZOMBIE,
 	}
 }
 
 func (g *Game) GameStateToGame(gs *websnake.GameState) Game {
+	log.Println("Gamestate", gs)
+	log.Println("Players", gs.Players)
+	log.Println("Players.Players", gs.Players.Players)
+	log.Println(gs.Snakes)
+	log.Println(gs.Foods)
+	log.Println("+++++++++++++++++++++++++++++++++++++++++++++++++==")
+
 	gamePlayers := gs.Players.Players
 	players := map[int32]*Player{}
 	gameSnakes := gs.Snakes
@@ -149,11 +157,14 @@ func (g *Game) GameStateToGame(gs *websnake.GameState) Game {
 		currPlayer := GamePlayerToPlayer(gp)
 		players[currPlayer.Id] = currPlayer
 	}
-
+	log.Println("1")
 	for _, gameSnake := range gameSnakes {
+		log.Println(gameSnake)
 		newSnake := g.GameStateSnakeToSnake(gameSnake)
+		log.Println(newSnake)
 		players[*gameSnake.PlayerId].Snake = newSnake
 	}
+	log.Println("2")
 
 	foods := []geometry.Position{}
 	for _, coord := range gs.Foods {
@@ -162,6 +173,7 @@ func (g *Game) GameStateToGame(gs *websnake.GameState) Game {
 			Y: *coord.Y,
 		})
 	}
+	log.Println("3")
 
 	return Game{
 		Players: players,
@@ -276,53 +288,6 @@ func HandleUserInput(ke *fyne.KeyEvent, s *snake.Snake) {
 	if newdir, ok := keyToDir[ke.Name]; ok {
 		s.SetDirection(newdir)
 	}
-}
-
-func (g *Game) handleJoin(message pubsub.Message) {
-	msg := message.Msg
-
-	joinMsg := msg.GetJoin()
-	log.Println("Catch join msg: ", joinMsg)
-	log.Println("From: ", message.From)
-	log.Println("To: ", message.To)
-
-	newPlayer, err := g.AddPlayer(
-		*joinMsg.PlayerName,
-		message.From.IP.String(),
-		message.From.Port,
-		*joinMsg.RequestedRole,
-		*joinMsg.PlayerType)
-
-	if err != nil {
-		// Отправляем сообщение с ошибкой с замененными отправителем и получателем.
-		errorMessage := err.Error()
-		pubsub.GetGlobalPubSubService().Publish("senderror", pubsub.Message{
-			Msg: &websnake.GameMessage{
-				MsgSeq:     new(int64),
-				SenderId:   new(int32),
-				ReceiverId: new(int32),
-				Type: &websnake.GameMessage_Error{
-					Error: &websnake.GameMessage_ErrorMsg{
-						ErrorMessage: &errorMessage,
-					},
-				},
-			},
-			To:   message.From,
-			From: message.To,
-		})
-		return
-	}
-
-	pubsub.GetGlobalPubSubService().Publish("sendack", pubsub.Message{
-		Msg: &websnake.GameMessage{
-			MsgSeq:     new(int64),
-			SenderId:   new(int32),
-			ReceiverId: &newPlayer.Id,
-			Type:       &websnake.GameMessage_Ack{Ack: &websnake.GameMessage_AckMsg{}},
-		},
-		To:   message.From,
-		From: message.To,
-	})
 }
 
 func (g *Game) AddFood() {

@@ -117,10 +117,9 @@ func Draw(g *Game) {
 		}
 
 		objsToDraw = append(objsToDraw, GetSnakeToDraw(*p.Snake, g.Food, g.WinSize, g.GridSize, snakeColor)...)
-
 		scoreLabel := widget.NewLabel("Score for " + strconv.Itoa(int(p.Id)) + " " + p.Name + ":" + fmt.Sprint(p.Score))
-		scoreLabel.Move(fyne.NewPos(600.0, float32(i)*150.0))
-		scoreLabel.Resize(fyne.NewSize(200.0, 150.0))
+		scoreLabel.Move(fyne.NewPos(600.0, float32(i)*50.0))
+		scoreLabel.Resize(fyne.NewSize(200.0, 50.0))
 		objsToDraw = append(objsToDraw, scoreLabel)
 	}
 

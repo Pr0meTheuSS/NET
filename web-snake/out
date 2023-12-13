@@ -1,5 +1,0 @@
-map[]Subscribe for topic  join
-map[join:[{EventChannel:0xc00101b6e0 EventHandler:0xa5c020}]]map[join:[{EventChannel:0xc00101b6e0 EventHandler:0xa5c020}]]Subscribe for topic  newgamestate
-map[join:[{EventChannel:0xc00101b6e0 EventHandler:0xa5c020}] newgamestate:[{EventChannel:0xc00101b7a0 EventHandler:0xa5bfa0}]]map[join:[{EventChannel:0xc00101b6e0 EventHandler:0xa5c020}] newgamestate:[{EventChannel:0xc00101b7a0 EventHandler:0xa5bfa0}]]Subscribe for topic  steer
-map[join:[{EventChannel:0xc00101b6e0 EventHandler:0xa5c020}] newgamestate:[{EventChannel:0xc00101b7a0 EventHandler:0xa5bfa0}] steer:[{EventChannel:0xc00101b800 EventHandler:0xa5be40}]]map[join:[{EventChannel:0xc00101b6e0 EventHandler:0xa5c020}] newgamestate:[{EventChannel:0xc00101b7a0 EventHandler:0xa5bfa0}] steer:[{EventChannel:0xc00101b800 EventHandler:0xa5be40}]]Subscribe for topic  steersend
-map[join:[{EventChannel:0xc00101b6e0 EventHandler:0xa5c020}] newgamestate:[{EventChannel:0xc00101b7a0 EventHandler:0xa5bfa0}] steer:[{EventChannel:0xc00101b800 EventHandler:0xa5be40}] steersend:[{EventChannel:0xc00101b8c0 EventHandler:0xa68300}]]

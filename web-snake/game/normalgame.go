@@ -59,11 +59,12 @@ func getButtonsToConenctWithGame(application fyne.App, ch chan *Game, username s
 	btns := []fyne.CanvasObject{}
 	mtx.RLock()
 	for k, v := range gameslist {
+		currentAnnounce := v
 		btns = append(btns, widget.NewButton(k, func() {
 			log.Println("Choose to connection")
 
-			game := CreateGame(application, username, *v.GameName, *v.Config.Width, *v.Config.Height, *v.Config.FoodStatic, *v.Config.StateDelayMs, websnake.NodeRole_NORMAL)
-			go game.ConnectToTheGame(v)
+			game := CreateGame(application, username, currentAnnounce.GetGameName(), *currentAnnounce.Config.Width, *currentAnnounce.Config.Height, *currentAnnounce.Config.FoodStatic, *currentAnnounce.Config.StateDelayMs, websnake.NodeRole_NORMAL)
+			go game.ConnectToTheGame(currentAnnounce)
 			ch <- game
 		}))
 	}

@@ -19,7 +19,7 @@ const (
 
 type Snake struct {
 	Body     []geometry.Position
-	prevTail geometry.Position
+	PrevTail geometry.Position
 	Dir      Direction
 	IsAlive  bool
 	score    int
@@ -60,7 +60,7 @@ func NewSnake(boardWidth, boardHeight, snakePosX, snakePosY int32) *Snake {
 
 	snakeGame := &Snake{
 		Body:     []geometry.Position{head, tail},
-		prevTail: tail,
+		PrevTail: tail,
 		Dir:      Direction(dir),
 		IsAlive:  true,
 		score:    0,
@@ -71,7 +71,7 @@ func NewSnake(boardWidth, boardHeight, snakePosX, snakePosY int32) *Snake {
 }
 
 func (s *Snake) GrowUp() {
-	s.Body = append(s.Body, s.prevTail)
+	s.Body = append(s.Body, s.PrevTail)
 }
 
 func (s *Snake) IsSnakeAlive() bool {
@@ -87,12 +87,12 @@ func (s *Snake) Head() *geometry.Position {
 }
 
 func (s *Snake) Move() {
-	if !s.IsAlive {
+	if !s.IsAlive || len(s.Body) == 0 {
 		return
 	}
 
 	head := s.Body[0]
-	s.prevTail = s.Body[len(s.Body)-1]
+	s.PrevTail = s.Body[len(s.Body)-1]
 
 	switch s.Dir {
 	case UP:

@@ -25,6 +25,7 @@ func InitHelloWinContent(application fyne.App) *fyne.Container {
 		webNode.SetGame(g)
 		go webNode.Join()
 		go webNode.CleanupPlayers()
+		go webNode.ResendQueuedMessage()
 	})
 
 	createTheGameButton := widget.NewButton("Создать новую игру", func() {

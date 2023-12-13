@@ -1,13 +1,14 @@
 package webnodes
 
 import (
+	"fmt"
 	"log"
 	"main/websnake"
 
 	"google.golang.org/protobuf/proto"
 )
 
-func (w *WebNode) buildAckBytes(senderSeqId int64, receiverId int32) []byte {
+func (w *WebNode) buildAckBytes(senderSeqId int64, receiverId int32) (int64, []byte) {
 	log.Println("Send Ack---------------------------------", senderSeqId, receiverId)
 	msg := websnake.GameMessage{
 		MsgSeq:     &senderSeqId,
@@ -23,10 +24,10 @@ func (w *WebNode) buildAckBytes(senderSeqId int64, receiverId int32) []byte {
 		log.Fatal(err)
 	}
 
-	return data
+	return seq, data
 }
 
-func (w *WebNode) buildAnnounceBytes(announce websnake.GameAnnouncement) []byte {
+func (w *WebNode) buildAnnounceBytes(announce websnake.GameAnnouncement) (int64, []byte) {
 	seq := generateSeq()
 	msg := websnake.GameMessage{
 		MsgSeq:     &seq,
@@ -43,10 +44,29 @@ func (w *WebNode) buildAnnounceBytes(announce websnake.GameAnnouncement) []byte 
 		log.Fatal(err)
 	}
 
-	return data
+	return seq, data
 }
 
-func (w *WebNode) buildJoinBytes(username string, gamename string, playerType websnake.PlayerType, playerRole websnake.NodeRole) []byte {
+func (w *WebNode) buildErrorBytes(errMsg string) (int64, []byte) {
+	seq := generateSeq()
+	message := websnake.GameMessage{
+		MsgSeq: &seq,
+		Type: &websnake.GameMessage_Error{
+			Error: &websnake.GameMessage_ErrorMsg{
+				ErrorMessage: &errMsg,
+			},
+		},
+	}
+
+	data, err := proto.Marshal(&message)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return seq, data
+}
+
+func (w *WebNode) buildJoinBytes(username string, gamename string, playerType websnake.PlayerType, playerRole websnake.NodeRole) (int64, []byte) {
 	seq := generateSeq()
 	message := websnake.GameMessage{
 		MsgSeq: &seq,
@@ -65,10 +85,10 @@ func (w *WebNode) buildJoinBytes(username string, gamename string, playerType we
 		log.Fatal(err)
 	}
 
-	return data
+	return seq, data
 }
 
-func (w *WebNode) buildPingBytes() []byte {
+func (w *WebNode) buildPingBytes() (int64, []byte) {
 	seq := generateSeq()
 	gameMessage := websnake.GameMessage{
 		MsgSeq:     &seq,
@@ -82,19 +102,18 @@ func (w *WebNode) buildPingBytes() []byte {
 		log.Fatal(err)
 	}
 
-	return data
+	return seq, data
 }
 
 var globalStateOrder = int32(0)
 
-func (w *WebNode) buildSteerBytes(direction websnake.Direction) []byte {
+func (w *WebNode) buildSteerBytes(direction websnake.Direction) (int64, []byte) {
 	seq := generateSeq()
 	log.Println("In steer builder main player id:", *w.game.MainPlayerID)
 
 	gameMessage := websnake.GameMessage{
-		MsgSeq:     &seq,
-		SenderId:   w.game.MainPlayerID,
-		ReceiverId: new(int32),
+		MsgSeq:   &seq,
+		SenderId: w.game.MainPlayerID,
 		Type: &websnake.GameMessage_Steer{
 			Steer: &websnake.GameMessage_SteerMsg{
 				Direction: &direction,
@@ -107,7 +126,7 @@ func (w *WebNode) buildSteerBytes(direction websnake.Direction) []byte {
 		log.Fatal(err)
 	}
 
-	return data
+	return seq, data
 }
 
 func (w *WebNode) buildGameStateBytes(receiverId int32, stateOrder int32) []byte {
@@ -127,11 +146,35 @@ func (w *WebNode) buildGameStateBytes(receiverId int32, stateOrder int32) []byte
 			},
 		},
 	}
-	log.Println("players in gamestate message:", msg.GetState().State.GetPlayers())
+
 	data, err := proto.Marshal(&msg)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	return data
+}
+
+func (w *WebNode) buildChangeRoleBytes(senderRole websnake.NodeRole, recvRole websnake.NodeRole) (int64, []byte) {
+	seq := generateSeq()
+	fmt.Println("main player id:", *w.game.MainPlayerID)
+	fmt.Println("senderRole:", senderRole)
+	fmt.Println("recvRole:", recvRole)
+	msg := websnake.GameMessage{
+		MsgSeq:   &seq,
+		SenderId: w.game.MainPlayerID,
+		Type: &websnake.GameMessage_RoleChange{
+			RoleChange: &websnake.GameMessage_RoleChangeMsg{
+				SenderRole:   &senderRole,
+				ReceiverRole: &recvRole,
+			},
+		},
+	}
+
+	data, err := proto.Marshal(&msg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return seq, data
 }

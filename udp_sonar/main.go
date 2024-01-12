@@ -13,9 +13,30 @@ import (
 )
 
 const (
-	multicastGroupIPv4 = "224.0.0.1"
-	port               = 9876
+	multicastGroupIPv4 = "239.192.0.4"
+	port               = 9192
 )
+
+func init() {
+	os := runtime.GOOS
+	switch os {
+	case "windows":
+		clearCommand = "cls"
+	case "darwin", "linux":
+		clearCommand = "clear"
+	default:
+		fmt.Printf("%s.\nWarning: The program may not work correctly on this platform", os)
+		clearCommand = "clear"
+	}
+}
+
+var clearCommand = ""
+
+func clearScreen() {
+	cmd := exec.Command(clearCommand)
+	cmd.Stdout = os.Stdout
+	cmd.Run()
+}
 
 // TODO: run on windows
 
@@ -119,32 +140,6 @@ func receiveMulticastMessages(p *ipv4.PacketConn) {
 			printClones()
 		}
 	}
-}
-
-func init() {
-	os := runtime.GOOS
-	switch os {
-	case "windows":
-		fmt.Println("Windows")
-		clearCommand = "cls"
-	case "darwin":
-		fmt.Println("MAC operating system")
-		clearCommand = "clear"
-	case "linux":
-		fmt.Println("Linux")
-		clearCommand = "clear"
-	default:
-		fmt.Printf("%s.\nWarning: The program may not work correctly on this platform", os)
-		clearCommand = "clear"
-	}
-}
-
-var clearCommand = ""
-
-func clearScreen() {
-	cmd := exec.Command(clearCommand)
-	cmd.Stdout = os.Stdout
-	cmd.Run()
 }
 
 func printClones() {

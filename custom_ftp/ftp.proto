@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option go_package = "/ftp";
+
+package filetransfer;
+
+message FileChunk {
+  bytes data = 1;
+}
+
+message Handshake {
+  fixed32 chunk_size = 1;
+  fixed64 total_size = 2;
+  fixed32 filename_lenfth = 3;
+  string filename = 4;
+}
+
+message FileTransferResponse {
+  bool success = 1;
+}
